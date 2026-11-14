@@ -1,0 +1,8 @@
+# Backend
+fastapi==0.115.12
+uvicorn==0.34.2
+pydantic==2.11.4
+
+# Testing
+pytest==9.2.0
+httpx==0.28.1
