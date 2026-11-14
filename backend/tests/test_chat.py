@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
 from app.main import app
+from app.services import ai_service
+
 
 client = TestClient(app)
 
@@ -70,6 +72,53 @@ def test_chat_trim_question():
 def test_chat_missing_question():
     # Reject requests without a question
     response = client.post("/chat", json={
+        "mode": "ask"
+    })
+
+    assert response.status_code == 422
+
+
+def test_chat_ai_failure(monkeypatch):
+    # Simulate an AI service failure
+    def failing_answer(request):
+        raise ai_service.AIServiceError("Provider unavailable")
+
+    monkeypatch.setattr(ai_service, "generate_answer", failing_answer)
+
+    response = client.post("/chat", json={
+        "question": "How should I debug this?",
+        "mode": "mentor"
+    })
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "AI service is temporarily unavailable"
+    }
+
+
+def test_chat_default_mode():
+    # Verify the default Ask mode
+    response = client.post("/chat", json={
+        "question": "What is RAG?"
+    })
+
+    assert response.status_code == 200
+    assert response.json()["mode"] == "ask"
+
+def test_chat_missing_mode_defaults_to_ask():
+    # Check default mode
+    response = client.post("/chat", json={
+        "question": "Explain dependency injection"
+    })
+
+    assert response.status_code == 200
+    assert response.json()["mode"] == "ask"
+
+
+def test_chat_wrong_question_type():
+    # Reject non-string questions
+    response = client.post("/chat", json={
+        "question": 123,
         "mode": "ask"
     })
 
