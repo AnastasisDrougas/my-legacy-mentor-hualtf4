@@ -1,11 +1,16 @@
-# Python environment and cache
-.venv/
+# Python
 __pycache__/
+*.py[cod]
 .pytest_cache/
 
-# Local configuration and database
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.idea/
+
+# Environment variables
 .env
 .env.*
 !.env.example
-*.db
-*.sqlite3
