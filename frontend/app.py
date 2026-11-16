@@ -71,8 +71,6 @@ def icon(name: str, size: int = 16) -> str:
 
 
 def render_html(markup: str) -> None:
-    """Render raw HTML. Lines are joined so markdown never treats
-    indentation as a code block."""
     compact = " ".join(line.strip() for line in markup.strip().splitlines())
     st.markdown(compact, unsafe_allow_html=True)
 
@@ -87,45 +85,44 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ---------------------------------------------------------
+# -------------
 # Design system
-#
-# Spacing scale : 4 / 8 / 12 / 16 / 24 / 32 px
-# Radii         : 6 (controls) / 8 (inputs, buttons) / 12 (cards)
-# Accent        : indigo (single primary color)
-# Type          : Space Grotesk, 12 / 13 / 14 / 15 / 24 px; weights 400, 500, 600
-# ---------------------------------------------------------
-
+# -------------
+# (CSS Overrides)
 st.markdown(
     """
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap');
 
         :root {
             color-scheme: dark;
 
-            --bg: #0f1115;
-            --surface: #161a22;
-            --surface-muted: #1c212b;
-            --border: #262c38;
-            --border-strong: #343c4b;
-            --text: #e6e9ef;
-            --text-muted: #a3acba;
-            --text-subtle: #8b95a5;
+            --bg: #131314;
+            --surface: #1e1f20;
+            --surface-muted: #282a2c;
+            --surface-hover: #333537;
+            --border: rgba(255, 255, 255, 0.06);
+            --border-strong: #444746;
 
-            --accent: #4f46e5;
-            --accent-hover: #4338ca;
-            --accent-text: #a5b4fc;
-            --accent-soft: rgba(99, 102, 241, .16);
+            --text: #e3e3e3;
+            --text-muted: #c4c7c5;
+            --text-subtle: #8e918f;
 
-            --success: #4ade80;
-            --success-bg: rgba(34, 197, 94, .12);
-            --warning: #fbbf24;
-            --warning-bg: rgba(245, 158, 11, .12);
-            --error: #f87171;
-            --error-bg: rgba(239, 68, 68, .12);
-            --info: #60a5fa;
-            --info-bg: rgba(59, 130, 246, .12);
+            --accent: #8ab4f8;
+            --accent-hover: #aecbfa;
+            --accent-on: #041e49;
+            --accent-text: #a8c7fa;
+            --accent-soft: #004a77;
+            --ai-gradient: linear-gradient(74deg, #4285f4 0%, #9b72cb 50%, #d96570 100%);
+
+            --success: #81c995;
+            --success-bg: rgba(129, 201, 149, 0.14);
+            --warning: #fdd663;
+            --warning-bg: rgba(253, 214, 99, 0.14);
+            --error: #f28b82;
+            --error-bg: rgba(242, 139, 130, 0.14);
+            --info: #a8c7fa;
+            --info-bg: rgba(168, 199, 250, 0.10);
 
             --s1: 4px;
             --s2: 8px;
@@ -134,13 +131,15 @@ st.markdown(
             --s5: 24px;
             --s6: 32px;
 
-            --r-sm: 6px;
-            --r-md: 8px;
-            --r-lg: 12px;
+            --r-sm: 12px;
+            --r-md: 16px;
+            --r-lg: 24px;
+            --r-pill: 9999px;
 
-            --ease: 150ms ease;
-            --font: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+            --ease: 200ms cubic-bezier(0.2, 0, 0, 1);
+            --font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI',
                     Roboto, 'Helvetica Neue', Arial, sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
         }
 
         /* ---------- Base ---------- */
@@ -154,6 +153,10 @@ st.markdown(
             font-family: var(--font);
         }
 
+        .stApp code, .stApp pre {
+            font-family: var(--font-mono);
+        }
+
         .stApp {
             background-color: var(--bg);
             color: var(--text);
@@ -163,7 +166,7 @@ st.markdown(
         .stApp p, .stApp li, .stApp label {
             color: var(--text);
             font-size: 15px;
-            line-height: 1.6;
+            line-height: 1.65;
         }
 
         #MainMenu, footer,
@@ -179,16 +182,24 @@ st.markdown(
             background: transparent;
         }
 
-        /* Sidebar open / close controls must stay visible */
+        /* Sidebar open / close controls */
         [data-testid="stExpandSidebarButton"],
         [data-testid="stSidebarCollapsedControl"],
         [data-testid="stSidebarCollapseButton"] button {
             color: var(--text-muted);
+            border-radius: var(--r-pill);
+            transition: background-color var(--ease), color var(--ease);
+        }
+
+        [data-testid="stExpandSidebarButton"]:hover,
+        [data-testid="stSidebarCollapseButton"] button:hover {
+            background-color: var(--surface-muted);
+            color: var(--text);
         }
 
         .block-container {
-            max-width: 960px;
-            padding: var(--s6) var(--s5) 7rem var(--s5);
+            max-width: 800px;
+            padding: var(--s6) var(--s5) 8rem var(--s5);
         }
 
         hr {
@@ -217,7 +228,7 @@ st.markdown(
 
         [data-testid="stSidebar"] {
             background-color: var(--surface);
-            border-right: 1px solid var(--border);
+            border-right: none;
         }
 
         [data-testid="stSidebarUserContent"] {
@@ -228,13 +239,14 @@ st.markdown(
             display: flex;
             align-items: center;
             gap: var(--s3);
+            padding: 0 var(--s1);
         }
 
         .brand-mark {
-            width: 32px;
-            height: 32px;
-            border-radius: var(--r-md);
-            background: var(--accent);
+            width: 34px;
+            height: 34px;
+            border-radius: var(--r-pill);
+            background: var(--ai-gradient);
             color: #ffffff;
             display: flex;
             align-items: center;
@@ -244,8 +256,9 @@ st.markdown(
 
         .brand-name {
             color: var(--text);
-            font-size: 14px;
+            font-size: 15px;
             font-weight: 600;
+            letter-spacing: -0.01em;
             line-height: 1.2;
         }
 
@@ -259,26 +272,26 @@ st.markdown(
             color: var(--text-subtle);
             font-size: 11px;
             font-weight: 500;
-            letter-spacing: .06em;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
-            margin: var(--s5) 0 var(--s2) 0;
+            margin: var(--s5) 0 var(--s2) var(--s2);
         }
 
         .profile-card {
             display: flex;
             gap: var(--s3);
             align-items: flex-start;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--r-lg);
+            background: var(--surface-muted);
+            border: none;
+            border-radius: var(--r-md);
             padding: var(--s4);
         }
 
         .profile-avatar {
             width: 36px;
             height: 36px;
-            border-radius: 50%;
-            background: var(--surface-muted);
+            border-radius: var(--r-pill);
+            background: var(--surface-hover);
             color: var(--text-muted);
             display: flex;
             align-items: center;
@@ -294,7 +307,7 @@ st.markdown(
         }
 
         .profile-meta {
-            color: var(--text-subtle);
+            color: var(--text-muted);
             font-size: 13px;
             line-height: 1.45;
             margin-top: var(--s1);
@@ -307,25 +320,25 @@ st.markdown(
             background: var(--info-bg);
             color: var(--info);
             border-radius: var(--r-md);
-            padding: var(--s3);
+            padding: var(--s3) var(--s4);
             margin-top: var(--s3);
-            font-size: 13px;
+            font-size: 12.5px;
             line-height: 1.45;
         }
 
         .note svg { flex-shrink: 0; margin-top: 2px; }
 
-        /* Mode selector */
+        /* Mode selector (Tonal Pills) */
         [data-testid="stSidebar"] [role="radiogroup"] {
             gap: var(--s1);
         }
 
         [data-testid="stSidebar"] [role="radiogroup"] label {
             width: 100%;
-            padding: var(--s2) var(--s3);
-            border-radius: var(--r-md);
-            border: 1px solid transparent;
-            transition: background-color var(--ease), border-color var(--ease);
+            padding: 10px var(--s4);
+            border-radius: var(--r-pill);
+            border: none;
+            transition: background-color var(--ease), color var(--ease);
             cursor: pointer;
         }
 
@@ -335,28 +348,32 @@ st.markdown(
 
         [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
             background: var(--accent-soft);
-            border-color: rgba(129, 140, 248, .4);
+        }
+
+        [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) p {
+            color: var(--accent-text);
+            font-weight: 600;
         }
 
         [data-testid="stSidebar"] [role="radiogroup"] label p {
             font-size: 14px;
             font-weight: 500;
+            color: var(--text-muted);
         }
 
         /* Buttons */
         .stApp .stButton > button {
-            height: 36px;
-            min-height: 36px;
-            padding: 0 var(--s4);
-            border-radius: var(--r-md);
-            border: 1px solid var(--border-strong);
-            background: var(--surface);
+            height: 40px;
+            min-height: 40px;
+            padding: 0 var(--s5);
+            border-radius: var(--r-pill);
+            border: none;
+            background: var(--surface-muted);
             color: var(--text);
             font-size: 14px;
             font-weight: 500;
-            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
-            transition: background-color var(--ease), border-color var(--ease),
-                        color var(--ease);
+            box-shadow: none;
+            transition: background-color var(--ease), color var(--ease);
         }
 
         .stApp .stButton > button p {
@@ -366,20 +383,17 @@ st.markdown(
         }
 
         .stApp .stButton > button:hover {
-            background: var(--surface-muted);
-            border-color: var(--border-strong);
+            background: var(--surface-hover);
             color: var(--text);
         }
 
         .stApp .stButton > button:active {
-            background: var(--border);
+            background: var(--border-strong);
         }
 
         .stApp .stButton > button:disabled {
-            background: var(--surface-muted);
-            color: #6b7586;
-            border-color: var(--border);
-            box-shadow: none;
+            background: rgba(40, 42, 44, 0.45);
+            color: var(--text-subtle);
             cursor: not-allowed;
         }
 
@@ -388,16 +402,17 @@ st.markdown(
             display: inline-flex;
             align-items: center;
             gap: var(--s2);
-            border-radius: 999px;
-            padding: 4px 12px 4px 10px;
-            font-size: 13px;
+            border-radius: var(--r-pill);
+            padding: 5px 14px 5px 12px;
+            font-size: 12.5px;
             font-weight: 500;
             line-height: 1.4;
+            margin-left: var(--s1);
         }
 
         .status .dot {
-            width: 8px;
-            height: 8px;
+            width: 7px;
+            height: 7px;
             border-radius: 50%;
             background: currentColor;
         }
@@ -410,12 +425,13 @@ st.markdown(
             color: var(--text-subtle);
             font-size: 12px;
             margin-top: var(--s5);
+            padding-left: var(--s2);
         }
 
         /* ---------- Page header ---------- */
 
         .page-header {
-            padding-bottom: var(--s5);
+            padding-bottom: var(--s4);
             margin-bottom: var(--s5);
             border-bottom: 1px solid var(--border);
         }
@@ -427,13 +443,13 @@ st.markdown(
         }
 
         .breadcrumb .sep { margin: 0 var(--s2); color: var(--border-strong); }
-        .breadcrumb .current { color: var(--text-muted); }
+        .breadcrumb .current { color: var(--accent-text); font-weight: 500; }
 
         .page-title {
             color: var(--text);
-            font-size: 24px;
+            font-size: 28px;
             font-weight: 600;
-            letter-spacing: -0.015em;
+            letter-spacing: -0.02em;
             line-height: 1.25;
             margin: 0 0 var(--s2) 0;
             padding: 0;
@@ -450,119 +466,156 @@ st.markdown(
         /* ---------- Empty state ---------- */
 
         .empty {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--r-lg);
-            padding: var(--s6);
-            margin-bottom: var(--s4);
+            background: transparent;
+            border: none;
+            padding: var(--s3) 0 var(--s5) 0;
+            margin-bottom: var(--s2);
         }
 
         .empty-title {
-            color: var(--text);
-            font-size: 18px;
+            background: linear-gradient(90deg, #8ab4f8 0%, #c58af9 55%, #e3e3e3 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 24px;
             font-weight: 600;
-            letter-spacing: -0.01em;
+            letter-spacing: -0.015em;
             margin: 0 0 var(--s2) 0;
+            display: inline-block;
         }
 
         .empty-text {
             color: var(--text-muted) !important;
             margin: 0;
-            max-width: 560px;
+            max-width: 580px;
         }
 
         .cap-card {
             background: var(--surface);
-            border: 1px solid var(--border);
+            border: none;
             border-radius: var(--r-lg);
-            padding: var(--s4) var(--s5);
+            padding: var(--s5);
             height: 100%;
-            transition: border-color var(--ease);
+            transition: background-color var(--ease);
         }
 
-        .cap-card:hover { border-color: var(--border-strong); }
+        .cap-card:hover {
+            background: var(--surface-muted);
+        }
 
         .cap-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: var(--r-md);
-            background: var(--accent-soft);
+            width: 36px;
+            height: 36px;
+            border-radius: var(--r-pill);
+            background: var(--surface-muted);
             color: var(--accent-text);
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: var(--s3);
+            margin-bottom: var(--s4);
+        }
+
+        .cap-card:hover .cap-icon {
+            background: var(--surface-hover);
         }
 
         .cap-title {
             color: var(--text);
-            font-size: 14px;
+            font-size: 15px;
             font-weight: 600;
-            margin-bottom: var(--s1);
+            margin-bottom: var(--s2);
         }
 
         .cap-text {
             color: var(--text-muted) !important;
             font-size: 14px !important;
-            line-height: 1.5;
+            line-height: 1.55;
             margin: 0;
         }
 
         .hint {
             color: var(--text-subtle);
             font-size: 13px;
-            margin-top: var(--s4);
+            margin-top: var(--s5);
         }
 
-        /* ---------- Chat ---------- */
+        /* ---------- Chat (Gemini Stream Style) ---------- */
 
         [data-testid="stChatMessage"] {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--r-lg);
-            padding: var(--s4) var(--s5);
-            margin-bottom: var(--s3);
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            padding: var(--s3) 0;
+            margin-bottom: var(--s4);
             gap: var(--s4);
+            align-items: flex-start;
         }
 
+        /* User prompt: right-aligned soft pill bubble */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
             background: var(--surface-muted);
+            border-radius: 24px 24px 4px 24px;
+            padding: 14px 20px;
+            max-width: 82%;
+            margin-left: auto;
+            flex-direction: row-reverse;
         }
 
         [data-testid="stChatMessageAvatarUser"] {
-            background: #344054;
-            color: #ffffff;
-            border-radius: var(--r-md);
+            background: var(--surface-hover);
+            color: var(--text);
+            border-radius: var(--r-pill);
         }
 
         [data-testid="stChatMessageAvatarAssistant"] {
-            background: var(--accent);
+            background: var(--ai-gradient);
             color: #ffffff;
-            border-radius: var(--r-md);
+            border-radius: var(--r-pill);
         }
 
         [data-testid="stChatMessage"] p {
             font-size: 15px;
-            line-height: 1.65;
+            line-height: 1.7;
+            color: var(--text);
         }
 
         [data-testid="stChatMessage"] code {
             font-size: 13px;
-            border-radius: var(--r-sm);
+            background: var(--surface);
+            padding: 2px 6px;
+            border-radius: 6px;
         }
 
-        /* Chat input */
+        [data-testid="stChatMessage"] pre {
+            background: var(--surface) !important;
+            border: none !important;
+            border-radius: var(--r-md) !important;
+            padding: var(--s4) !important;
+        }
+
+        /* Floating Pill Chat Input */
+        [data-testid="stBottom"] {
+            background: linear-gradient(180deg, rgba(19, 19, 20, 0) 0%, #131314 35%);
+            padding-top: var(--s4);
+        }
+
+        [data-testid="stBottom"] > div {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
         [data-testid="stChatInput"] {
             background: var(--surface);
-            border: 1px solid var(--border-strong);
-            border-radius: var(--r-lg);
-            box-shadow: 0 1px 2px rgba(16, 24, 40, .05);
-            transition: border-color var(--ease), box-shadow var(--ease);
+            border: 1px solid transparent;
+            border-radius: 28px;
+            box-shadow: none;
+            padding: 4px 8px;
+            transition: background-color var(--ease), border-color var(--ease);
         }
 
         [data-testid="stChatInput"]:focus-within {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, .35);
+            background: var(--surface-muted);
+            border-color: var(--border-strong);
+            box-shadow: none;
         }
 
         [data-testid="stChatInput"] textarea {
@@ -576,9 +629,9 @@ st.markdown(
 
         [data-testid="stChatInput"] button {
             background: var(--accent);
-            color: #ffffff;
-            border-radius: var(--r-md);
-            transition: background-color var(--ease);
+            color: var(--accent-on);
+            border-radius: var(--r-pill);
+            transition: background-color var(--ease), transform var(--ease);
         }
 
         [data-testid="stChatInput"] button:hover:not(:disabled) {
@@ -586,21 +639,22 @@ st.markdown(
         }
 
         [data-testid="stChatInput"] button:disabled {
-            background: var(--surface-muted);
-            color: #6b7586;
+            background: transparent;
+            color: var(--text-subtle);
         }
 
         /* ---------- Sources ---------- */
 
         div[data-testid="stExpander"] {
             background: var(--surface);
-            border: 1px solid var(--border);
+            border: none;
             border-radius: var(--r-md);
             margin-top: var(--s3);
+            overflow: hidden;
         }
 
         div[data-testid="stExpander"] summary {
-            padding: var(--s2) var(--s4);
+            padding: 10px var(--s4);
             transition: background-color var(--ease);
         }
 
@@ -611,7 +665,7 @@ st.markdown(
         div[data-testid="stExpander"] summary p {
             font-size: 13px;
             font-weight: 500;
-            color: var(--text-muted);
+            color: var(--accent-text);
         }
 
         .source {
@@ -628,7 +682,7 @@ st.markdown(
             font-weight: 500;
         }
 
-        .source-index { color: var(--text-subtle); margin-right: var(--s2); }
+        .source-index { color: var(--accent-text); margin-right: var(--s2); }
 
         .source-meta {
             color: var(--text-subtle);
@@ -646,8 +700,9 @@ st.markdown(
         /* ---------- Alerts and spinner ---------- */
 
         [data-testid="stAlert"] {
+            background: var(--surface);
             border-radius: var(--r-md);
-            border: 1px solid var(--border);
+            border: none;
         }
 
         [data-testid="stSpinner"] p,
@@ -659,15 +714,17 @@ st.markdown(
         /* ---------- Responsive ---------- */
 
         @media (max-width: 900px) {
-            .block-container { padding: var(--s5) var(--s4) 7rem var(--s4); }
-            .page-title { font-size: 22px; }
+            .block-container { padding: var(--s5) var(--s4) 7.5rem var(--s4); }
+            .page-title { font-size: 24px; }
         }
 
         @media (max-width: 640px) {
-            .block-container { padding: var(--s4) var(--s3) 7rem var(--s3); }
-            .page-title { font-size: 20px; }
-            .empty { padding: var(--s5) var(--s4); }
-            [data-testid="stChatMessage"] { padding: var(--s3) var(--s4); }
+            .block-container { padding: var(--s4) var(--s3) 7.5rem var(--s3); }
+            .page-title { font-size: 21px; }
+            [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+                max-width: 92%;
+                padding: 12px 16px;
+            }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -678,9 +735,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ---------------------------------------------------------
+# --------------
 # Session state
-# ---------------------------------------------------------
+# --------------
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -727,9 +784,9 @@ def status_pill(kind: str, text: str) -> None:
     )
 
 
-# ---------------------------------------------------------
+# ---------
 # Sidebar
-# ---------------------------------------------------------
+# ---------
 
 with st.sidebar:
 
