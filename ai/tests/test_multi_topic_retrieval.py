@@ -7,7 +7,7 @@ sys.path.insert(
     str(Path(__file__).resolve().parents[1]),
 )
 
-from multi_topic_retrieval import (
+from ai.multi_topic_retrieval import (
     MultiTopicRetriever,
     detect_topics,
     source_identity,

@@ -9,7 +9,7 @@ sys.path.insert(
     str(Path(__file__).resolve().parents[1]),
 )
 
-from retrieval import SeniorRetriever
+from ai.retrieval import SeniorRetriever
 
 
 def test_database_retrieval():

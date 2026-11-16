@@ -7,8 +7,8 @@ sys.path.insert(
     str(Path(__file__).resolve().parents[1]),
 )
 
-from rag_pipeline import RAGPipeline
-from multi_topic_retrieval import MultiTopicRetriever
+from ai.rag_pipeline import RAGPipeline
+from ai.multi_topic_retrieval import MultiTopicRetriever
 
 
 def evidence(source_id):

@@ -8,8 +8,8 @@ sys.path.insert(
 )
 
 from citation_audit import CitationAuditor
-from decision_calibration import DecisionCalibration
-from rag_pipeline import RAGPipeline
+from ai.decision_calibration import DecisionCalibration
+from ai.rag_pipeline import RAGPipeline
 
 
 def test_calibration_rules_present():

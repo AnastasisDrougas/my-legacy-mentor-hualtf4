@@ -9,8 +9,8 @@ sys.path.insert(
     str(Path(__file__).resolve().parents[1]),
 )
 
-from persona import PersonaEngine
-from rag_pipeline import RAGPipeline
+from ai.persona import PersonaEngine
+from ai.rag_pipeline import RAGPipeline
 
 
 class FakeRetriever:

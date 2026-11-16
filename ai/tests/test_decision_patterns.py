@@ -9,7 +9,7 @@ sys.path.insert(
     str(Path(__file__).resolve().parents[1]),
 )
 
-from decision_patterns import (
+from ai.decision_patterns import (
     load_records,
     extract_patterns,
     build_patterns,

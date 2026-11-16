@@ -9,8 +9,8 @@ sys.path.insert(
     str(Path(__file__).resolve().parents[1]),
 )
 
-from decision_selector import DecisionPatternSelector
-from rag_pipeline import RAGPipeline
+from ai.decision_selector import DecisionPatternSelector
+from ai.rag_pipeline import RAGPipeline
 
 
 class FakeRetriever:

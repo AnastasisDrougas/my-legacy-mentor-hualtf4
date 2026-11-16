@@ -1,12 +1,12 @@
 
-from llm_client import LLMClient
-from retrieval import SeniorRetriever
-from persona import PersonaEngine
-from decision_selector import DecisionPatternSelector
-from context_reasoning import ContextReasoning
-from decision_calibration import DecisionCalibration
-from critical_decision import CriticalDecisionGuard
-from multi_topic_retrieval import MultiTopicRetriever
+from .llm_client import LLMClient
+from .retrieval import SeniorRetriever
+from .persona import PersonaEngine
+from .decision_selector import DecisionPatternSelector
+from .context_reasoning import ContextReasoning
+from .decision_calibration import DecisionCalibration
+from .critical_decision import CriticalDecisionGuard
+from .multi_topic_retrieval import MultiTopicRetriever
 
 SYSTEM_PROMPT = """
 You are a technical knowledge assistant.

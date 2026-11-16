@@ -7,8 +7,8 @@ sys.path.insert(
     str(Path(__file__).resolve().parents[1]),
 )
 
-from critical_decision import CriticalDecisionGuard
-from rag_pipeline import RAGPipeline
+from ai.critical_decision import CriticalDecisionGuard
+from ai.rag_pipeline import RAGPipeline
 
 
 def test_payment_race_detection():

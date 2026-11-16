@@ -9,7 +9,7 @@ sys.path.insert(
     str(Path(__file__).resolve().parents[1]),
 )
 
-from adaptive_mentor import AdaptiveMentor
+from ai.adaptive_mentor import AdaptiveMentor
 
 
 class FakePipeline:

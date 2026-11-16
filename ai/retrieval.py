@@ -2,7 +2,7 @@
 import chromadb
 from sentence_transformers import SentenceTransformer
 
-from ingestion import (
+from .ingestion import (
     CHROMA_PATH,
     COLLECTION_NAME,
     MODEL_NAME,
