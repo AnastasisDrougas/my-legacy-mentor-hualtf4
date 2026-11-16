@@ -1,0 +1,42 @@
+{
+  "HOLD-001": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "HOLD-002": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "HOLD-003": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "HOLD-004": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "HOLD-005": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "HOLD-006": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "HOLD-007": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "HOLD-008": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "HOLD-009": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "HOLD-010": {
+    "A": "ask",
+    "B": "baseline"
+  }
+}

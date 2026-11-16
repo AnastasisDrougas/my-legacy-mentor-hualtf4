@@ -9,3 +9,12 @@ __pycache__/
 !.env.example
 *.db
 *.sqlite3
+# AI runtime and local files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.env.*
+!.env.example
+ai/storage/
+*.sqlite3

@@ -1,0 +1,242 @@
+{
+  "EVAL-001::baseline": {
+    "answer": "**Decision: Investigate the write‑contention problem first; do **not** keep adding indexes as a blanket solution, and postpone a PostgreSQL migration until the index‑based approach has been fully validated.**\n\n### Why adding more indexes is not the right next step\n\n| Evidence | What it tells us |\n|----------|------------------|\n| **ADR‑001** – “Add a composite index on *(customer_id, created_at)*, remove the SELECT * projection, and **measure** the query before considering a database migration.” | The team already decided that a single, well‑ordered composite index is the low‑risk fix for the latency spike. The decision explicitly *rejected* an immediate migration to PostgreSQL. |\n| **COM‑001** – “The index increases **write cost** and requires verification against realistic data skew.” | Adding an index is known to add overhead on every INSERT/UPDATE/DELETE. The commit notes that the index’s write penalty must be measured; it is not assumed to be negligible. |\n| **PR‑001** – “The index column order must match the filter and sorting pattern. Trade‑offs: the index **increases write cost** and requires verification.” | The same caution appears in the code‑review: the index is a trade‑off, not a free win. |\n| **MENTOR‑001** – “What lower‑risk option could address it? … **Add a composite index** …” | The mentoring dialogue reinforces that the first‑line mitigation is an index, not a platform change. |\n\nAll of the documented decisions converge on a **single, targeted index** as the initial mitigation. They also warn that **each additional index adds write‑path overhead** and can exacerbate the exact problem you are now seeing (concurrent write contention and lock errors).\n\n### What to do next\n\n1. **Validate the existing index**  \n   * Run the same seeded workload used in the original decision (p50/p95 latency, query‑plan inspection).  \n   * Verify that the index is being used as intended and that the query now scans far fewer rows.  \n\n2. **Measure write‑path impact**  \n   * Capture INSERT/UPDATE latency and lock statistics before and after the index was added.  \n   * If the index is the primary source of the new contention, consider **tuning** (e.g., reducing transaction size, using `INSERT … ON CONFLICT DO NOTHING`, or batching writes).  \n\n3. **Limit further index proliferation**  \n   * Only add another index if a specific query is demonstrably missing an appropriate covering key and the write‑impact can be quantified and accepted.  \n   * Each new index should be accompanied by a performance test that includes both read latency and write contention metrics.  \n\n4. **Re‑evaluate the platform choice only after the index‑based path is exhausted**  \n   * The original ADR explicitly rejected an immediate migration to PostgreSQL.  \n   * PostgreSQL can handle higher write concurrency, but moving databases is a large, risky change. It should be justified **only** if the index‑based solution cannot meet the latency target (p95 < 180 ms per the commit) **without unacceptable write penalties**.  \n\n### Summary\n\n- **Keep the current composite index** on `(customer_id, created_at)`; do not add more indexes indiscriminately.  \n- **Measure** both read latency and write contention after the index is in place.  \n- If the write‑contention persists and cannot be mitigated by transaction‑level tuning, only then **open a focused investigation** into a PostgreSQL migration, using the same validation criteria (p95 < 180 ms, stable write latency).  \n\nThis approach follows the documented low‑risk path, respects the trade‑offs already identified, and avoids committing to a heavyweight migration before the simpler index‑based fix has been fully proven.  \n\n**Citations:** ADR‑001, COM‑001, PR‑001, MENTOR‑001.",
+    "sources": [
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "COM-001",
+        "title": "Commit series: Order lookup latency",
+        "type": "commit"
+      },
+      {
+        "source_id": "PR-001",
+        "title": "PR review: Order lookup latency",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-001",
+        "title": "Mentoring 01: Order lookup latency (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "MENTOR-002",
+        "title": "Mentoring 02: Order lookup latency (incident response)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  "EVAL-001::ask": {
+    "answer": "**Decision:** Keep the focus on a measured, index‑centric fix first; only move to a PostgreSQL migration after you have concrete evidence that indexing cannot meet the latency and contention targets.\n\n---\n\n### Why not jump straight to PostgreSQL?\n\n| Reason | Evidence |\n|--------|----------|\n| **Evidence‑driven approach** – the team’s documented pattern is to *measure before migrating* rather than replace the datastore on a hunch. | ADR‑001, COM‑001, PR‑001, MENTOR‑001 all record the decision to add a composite index, remove the `SELECT *`, and only then consider a migration. |\n| **Migration cost & risk** – switching from SQLite (or the current engine) to PostgreSQL is a large, irreversible change that touches schema, CI pipelines, and deployment scripts. Without a clear performance gap, the risk outweighs the benefit. | The same sources explicitly rejected an “immediate migration” in favor of a smaller, reviewable change. |\n| **Current symptom is write contention** – adding more indexes *increases* write overhead (each INSERT/UPDATE must maintain every index). If you keep adding indexes without first confirming they are necessary, you may worsen the lock errors you’re already seeing. | ADR‑001 notes the trade‑off: “The index increases write cost and requires verification against realistic data skew.” |\n\n---\n\n### What to do next (actionable steps)\n\n1. **Audit the existing index set**  \n   * List all indexes on the `orders` table.  \n   * Identify any that are unused (e.g., never appear in `EXPLAIN` output) or duplicate the same column order.\n\n2. **Add the proven composite index** (if it does not already exist)  \n   * `CREATE INDEX idx_orders_customer_created ON orders(customer_id, created_at);`  \n   * Ensure the column order matches the filter/sort pattern used by the API (as emphasized in ADR‑001 and PR‑001).\n\n3. **Reduce write‑side impact**  \n   * Remove any *unnecessary* indexes discovered in step 1.  \n   * Consider using `INSERT … ON CONFLICT DO NOTHING/UPDATE` to limit lock duration, or batch writes if possible.\n\n4. **Measure before and after**  \n   * Run the seeded workload used in the original decision (p50/p95 latency, lock‑wait statistics).  \n   * Target: p95 < 180 ms *and* no increase in lock‑wait time.  \n   * If write latency or lock errors regress, roll back the new index (the “drop‑and‑revert” safety net described in COM‑001).\n\n5. **Monitor lock contention**  \n   * Enable `pg_stat_activity` / `pg_locks` (or the equivalent for your current engine) to capture lock wait events.  \n   * Look for patterns (e.g., long‑running transactions, high‑frequency updates on the same rows).\n\n6. **Re‑evaluate the migration decision**  \n   * If after the above steps the write contention remains unacceptable **and** you have quantified that PostgreSQL’s MVCC model would materially reduce lock wait time, then open a new ADR to compare the two engines under realistic load.  \n   * Until that evidence exists, keep the migration as a *future* option rather than an immediate fix.\n\n---\n\n### Trade‑offs Summary\n\n| Option | Benefits | Risks / Costs |\n|--------|----------|---------------|\n| **Add / tune indexes (current engine)** | Small, reviewable change; fast to ship; directly addresses the full‑scan identified in the query plan. | Increases write overhead; may exacerbate lock contention if indexes are over‑provisioned. |\n| **Migrate to PostgreSQL** | Better concurrency control (MVCC), richer indexing options, potentially lower lock contention. | Large migration effort, schema & CI changes, risk of regression; no guarantee it will solve the specific latency issue without first fixing the query pattern. |\n\nGiven the team’s **core principle** of “measure before optimizing” and the documented **anti‑pattern** of “premature optimization” (especially large refactors without tests), the safest path is to **first optimize the index strategy, validate with measurements, and only then consider a database migration**.\n\n---\n\n**Next steps for the team**\n\n1. Create a short‑lived branch that adds the composite index and removes any dead indexes.  \n2. Add automated regression tests that assert p95 < 180 ms and that lock‑wait time does not increase.  \n3. Run the tests in a staging environment that mirrors production traffic.  \n4. If the tests pass, merge the change; if they fail, roll back and revisit the write‑contention analysis.  \n\nThis approach respects the **low‑risk, evidence‑first** philosophy, keeps the system observable, and leaves the PostgreSQL migration as a well‑justified, later‑stage decision.",
+    "sources": [
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "COM-001",
+        "title": "Commit series: Order lookup latency",
+        "type": "commit"
+      },
+      {
+        "source_id": "PR-001",
+        "title": "PR review: Order lookup latency",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-001",
+        "title": "Mentoring 01: Order lookup latency (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "MENTOR-002",
+        "title": "Mentoring 02: Order lookup latency (incident response)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  "EVAL-002::baseline": {
+    "answer": "**What to do right now:** Immediately **disable the vulnerable production endpoint** (take it offline) and do not revert it to the insecure behavior until the authorization scope has been verified.\n\n**Why:**  \n\n* The endpoint is currently allowing a request from one tenant to retrieve another tenant’s order data. That is a classic cross‑tenant data‑exposure vulnerability. Keeping it online while a permanent fix is being built would continue to leak confidential customer information and could trigger a breach or compliance violation.  \n\n* All of the documented safety guidance for this issue calls for containment first:  \n  * “Disable the vulnerable endpoint until authorization scope is verified; do not revert to the insecure behavior.” — [COM-004]  \n  * The same operational‑recovery step appears in the system notes and the architecture decision record: “Disable the vulnerable endpoint until authorization scope is verified; do not revert to the insecure behavior.” — [DOC-004], [ADR-004]  \n  * The incident‑response mentoring advice echoes this: “If this is security‑sensitive, stop exposure immediately; otherwise check the rollback path. **Disable the vulnerable endpoint until authorization scope is verified**.” — [MENTOR-008]\n\n* Disabling the endpoint provides the required containment while the team prepares a **narrowly scoped, tested fix** (adding tenant‑id checks to repository queries and negative‑authorization tests) and validates it with cross‑tenant request tests that must return 403/404 without leaking data — [COM-004], [PR-004].\n\n**Next steps after disabling:**  \n\n1. Implement tenant‑scoped queries and add the required negative‑authorization tests at the API boundary.  \n2. Run the cross‑tenant request test suite to confirm that unauthorized requests now receive 403/404 and no information is leaked.  \n3. Once the tests pass and the fix is reviewed, safely re‑enable the endpoint.\n\nIn short, the immediate action is to **take the endpoint offline** to stop further cross‑tenant data exposure, because the documented production safety and incident‑response procedures all mandate containment before any permanent fix is deployed.",
+    "sources": [
+      {
+        "source_id": "COM-004",
+        "title": "Commit series: Cross-tenant order exposure",
+        "type": "commit"
+      },
+      {
+        "source_id": "DOC-004",
+        "title": "Cross-tenant order exposure: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-004",
+        "title": "ADR: Cross-tenant order exposure",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-008",
+        "title": "Mentoring 08: Cross-tenant order exposure (incident response)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "PR-004",
+        "title": "PR review: Cross-tenant order exposure",
+        "type": "pull_request"
+      }
+    ]
+  },
+  "EVAL-002::ask": {
+    "answer": "**What to do right now:**  \n**Disable the vulnerable endpoint (or block all traffic to it) until the tenant‑scoped authorization fix is in place and verified.**  \n\n**Why this is the correct immediate action**\n\n| Reason | Evidence |\n|--------|----------|\n| **Security‑first stance** – exposing orders across tenants is a data‑leakage risk that must be stopped before any further traffic can reach the bug. | ADR‑004, COM‑004, DOC‑004, MENTOR‑008, PR‑004 all state *“Disable the vulnerable endpoint until authorization scope is verified; do not revert to the insecure behavior.”* |\n| **Production safety** – the team’s risk tolerance for production changes is low; the safest containment is to take the endpoint offline rather than keep an insecure surface alive while a longer‑term fix is being built. | Senior profile: “Low for production changes” and “Production safety” principle. |\n| **Evidence‑driven containment** – the commit series and ADR require a “run cross‑tenant request tests and verify 403/404 without information leakage” before the endpoint can be re‑enabled. Until those tests pass, the endpoint must stay disabled. | COM‑004, ADR‑004, DOC‑004 specify the validation step and the rollback instruction. |\n| **Avoiding premature exposure** – keeping the endpoint online while a patch is in progress would continue to leak data and could trigger compliance violations. The documented decision pattern *security_first* explicitly calls for immediate containment. | EVIDENCE‑BACKED DECISION PATTERN “security_first”. |\n\n**Actionable steps (aligned with the senior’s decision‑making flow)**  \n\n1. **Containment** – Turn off the route (e.g., via feature flag, API gateway rule, or temporary 403/404 response). Record the change in the incident log.  \n2. **Communicate** – Notify the on‑call team, product owner, and any affected downstream services that the endpoint is temporarily unavailable for security reasons.  \n3. **Validate the fix** – Implement the minimal tenant‑scoped query change (add `tenant_id` to the repository filter) and add negative‑authorization tests at the API boundary as prescribed in ADR‑004 and PR‑004.  \n4. **Run cross‑tenant request tests** – Confirm that a request from one tenant receives a 403/404 and no order data leaks.  \n5. **Re‑enable** – Only after the tests pass and the change is reviewed (small, reviewable PR) should the endpoint be brought back online.  \n6. **Post‑mortem** – Document the root cause, the containment steps, and the audit of tenant scoping across all read/export paths (as the trade‑off note in the sources advises).  \n\n**Trade‑offs to be aware of**\n\n- **Availability vs. confidentiality** – Disabling the endpoint will impact any legitimate callers, but the confidentiality breach is a higher‑priority risk.  \n- **Speed of fix** – A narrow, well‑tested change is preferred over a large refactor; it is easier to review, roll back, and audit (COM‑004).  \n\nBy following these steps we satisfy the documented production safety note, respect the team’s low‑risk tolerance, and adhere to the “security first” principle that the architecture decision record (ADR‑004) and related commits enforce.",
+    "sources": [
+      {
+        "source_id": "COM-004",
+        "title": "Commit series: Cross-tenant order exposure",
+        "type": "commit"
+      },
+      {
+        "source_id": "DOC-004",
+        "title": "Cross-tenant order exposure: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-004",
+        "title": "ADR: Cross-tenant order exposure",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-008",
+        "title": "Mentoring 08: Cross-tenant order exposure (incident response)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "PR-004",
+        "title": "PR review: Cross-tenant order exposure",
+        "type": "pull_request"
+      }
+    ]
+  },
+  "EVAL-003::baseline": {
+    "answer": "**Short answer**\n\nDo **not** disable client retries.  \nA safer, production‑grade design is to make the *payment* endpoint **idempotent** by requiring a client‑provided idempotency key (or another unique request identifier) and persisting that key together with the payment result. On a retry the service looks up the key, sees that the payment has already been processed, and returns the original response instead of creating a new charge.\n\n---\n\n**Why disabling retries is not the preferred solution**\n\n* The incident analysis showed that transient network failures caused clients to retry `POST /payments` and, because the endpoint had no persisted idempotency key, two payment intents were sometimes created within 200 ms [INC-002].  \n* The team explicitly considered “disable client retries entirely” but rejected it as the chosen fix [ADR-002], [PR-002].  \n* Disabling retries would leave the system vulnerable to legitimate network glitches; clients would have no way to know whether the original request succeeded, leading to a poor user experience and higher support load.\n\n---\n\n**Recommended design (the one adopted by the team)**  \n\n| Step | What to do | Reason / benefit |\n|------|------------|------------------|\n| **1. Require an idempotency key** | The client generates a UUID (or similar) and sends it in a header or request field (e.g., `Idempotency-Key`). | Guarantees a unique identifier for each logical payment attempt. |\n| **2. Persist the key with the payment record** | Store the key together with the payment intent/status in a durable store (DB, KV store). | Allows the service to detect a repeat request even if the original request timed‑out after the payment was already committed. |\n| **3. Enforce uniqueness per customer** | The storage layer should have a unique constraint on `(customer_id, idempotency_key)`. | Prevents two different customers from colliding on the same key and ensures a single payment per logical request. |\n| **4. Return the original result on a retry** | When a request arrives with a key that already exists, fetch the stored result (success/failure, charge ID, etc.) and return it unchanged. | The client receives a deterministic response, eliminating duplicate charges. |\n| **5. Handle concurrency safely** | Use atomic “insert‑or‑ignore” semantics or a transaction that creates the payment only if the key is not present. | Guarantees that even two requests arriving within milliseconds (as seen in the incident) cannot both create a charge. |\n| **6. Add regression tests** | Simulate concurrent duplicate requests and verify that exactly one payment intent is created and the same response is returned [COM-002]. | Provides confidence that the fix works under real‑world race conditions. |\n\nThese steps are precisely what the architecture decision record (ADR‑002) and the subsequent commit (COM‑002) prescribe as the durable fix [ADR-002], [COM-002].\n\n---\n\n**Implementation checklist**\n\n1. **API contract** – Add a required `Idempotency-Key` header (or body field) to the payment endpoint documentation.  \n2. **Storage schema** – Extend the payment table with `idempotency_key` and a unique index on `(customer_id, idempotency_key)`.  \n3. **Service logic** –  \n   * On receipt, attempt to insert a new payment row with the supplied key.  \n   * If the insert succeeds, proceed with the payment provider call and store the result.  \n   * If the insert fails due to a duplicate key, fetch the existing row and return its stored outcome.  \n4. **Observability** – Emit metrics such as `payment_retry_idempotent_hits` and `payment_retry_idempotent_misses` to monitor usage.  \n5. **Operational runbook** – Document how to manually clear stale idempotency keys (e.g., after a configurable TTL) and how to troubleshoot mismatched responses [PR-002].\n\n---\n\n**Conclusion**\n\nThe safer, industry‑standard approach is to **make the payment operation idempotent** via a client‑provided idempotency key, rather than disabling retries. This design eliminates duplicate charges, preserves the ability for clients to recover from transient failures, and aligns with the accepted architectural decision and code changes already recorded in your system [ADR-002], [COM-002], [INC-002].",
+    "sources": [
+      {
+        "source_id": "ADR-002",
+        "title": "ADR: Duplicate payments on retry",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "COM-002",
+        "title": "Commit series: Duplicate payments on retry",
+        "type": "commit"
+      },
+      {
+        "source_id": "MENTOR-003",
+        "title": "Mentoring 03: Duplicate payments on retry (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "PR-002",
+        "title": "PR review: Duplicate payments on retry",
+        "type": "pull_request"
+      }
+    ]
+  },
+  "EVAL-003::ask": {
+    "answer": "**Answer**\n\nDo not disable client retries.  \nThe production‑safe design is to make the *POST /payments* endpoint idempotent by requiring a client‑provided idempotency key and enforcing its uniqueness per customer in persistent storage. When the same key is seen again, the service returns the original result instead of creating a new payment intent.\n\n---\n\n### Engineering reasoning\n\n| Step | Reasoning (aligned with Alex Morgan’s decision process) |\n|------|----------------------------------------------------------|\n| **Understand the problem** | A transient network failure can cause the client to time‑out after the payment has already been committed. The client retries the request, and because the endpoint has no persisted idempotency key, two payment intents can be created. |\n| **Collect evidence** | Request logs show identical cart IDs posted within 200 ms, confirming that the duplicate requests are genuine retries, not separate purchases. The incident and ADR records (ADR‑002, INC‑002) describe the same symptom. |\n| **Identify constraints** | • The API must remain available to external clients that may experience network glitches.<br>• Duplicate charges are a serious business and compliance risk.<br>• Any change must be safe to roll out in production and have regression coverage. |\n| **Compare alternatives** | 1. **Disable retries** – would force clients to implement their own back‑off and risk lost sales when a timeout occurs; it does not solve the root cause and violates the “production safety” principle.<br>2. **Idempotency‑key solution** – adds a small amount of state (the key) and a uniqueness check, but guarantees that retries are safe and transparent to the client. This is the approach accepted in ADR‑002 and implemented in COM‑002. |\n| **Evaluate risks** | • **Disabling retries**: high risk of lost revenue and poor client experience; no guarantee that clients will honor the rule.<br>• **Idempotency key**: introduces a DB write for each request and requires key retention, but the risk is limited to storage overhead and handling of key collisions, both of which are well‑understood and can be mitigated with a unique constraint and a short TTL. |\n| **Choose the simplest viable solution** | The idempotency‑key pattern is the simplest change that directly addresses the duplicate‑payment root cause while preserving client retry semantics. |\n| **Define validation & rollback** | • Add regression tests that replay concurrent duplicate requests and assert a single payment intent (COM‑002).<br>• Deploy behind a feature flag; if an unexpected regression appears, roll back the flag without affecting existing functionality. |\n\n---\n\n### Trade‑offs of the idempotency‑key design\n\n| Pro | Con |\n|-----|-----|\n| Guarantees *safe retries* – the same payment is never created twice. | Requires persisting the key (extra DB write). |\n| Keeps the client‑side retry logic simple and reliable. | Must manage key lifecycle (expiration, cleanup). |\n| Aligns with the team’s “production safety” and “maintainability” principles. | Slight increase in latency due to the uniqueness check. |\n| Provides a clear audit trail (key ↔ payment intent). | Needs coordination with clients to send the key (e.g., HTTP `Idempotency-Key` header). |\n\nThese trade‑offs were explicitly discussed in the ADR and subsequent commit (ADR‑002, COM‑002) and were judged acceptable compared with the risk of duplicate charges.\n\n---\n\n### Actionable recommendations\n\n1. **API contract change**  \n   * Require a client‑provided idempotency key (e.g., HTTP header `Idempotency-Key` or a field in the request body).  \n   * Document the requirement and the expected behavior on retries.\n\n2. **Storage enforcement**  \n   * Add a unique index on `(customer_id, idempotency_key)` in the payments table.  \n   * On receipt of a request, attempt to insert a new payment intent with the key; if a conflict occurs, fetch the existing intent and return its result.\n\n3. **Response handling**  \n   * For a duplicate key, return the original HTTP status (e.g., `201 Created`) and the same payload the client received on the first successful request.\n\n4. **Operational safeguards**  \n   * Write a regression test that fires two concurrent requests with the same key and asserts that only one payment intent is persisted (COM‑002).  \n   * Add a feature flag to enable the logic gradually and monitor duplicate‑payment metrics during rollout.\n\n5. **Key lifecycle management**  \n   * Define a TTL (e.g., 24 h) after which the key can be purged, and implement a background cleanup job.  \n   * Ensure the cleanup does not interfere with in‑flight retries.\n\n6. **Client communication**  \n   * Notify downstream services/clients of the new requirement and provide sample code for generating a UUID‑v4 key per checkout attempt.\n\n---\n\n### Why disabling retries is not advisable\n\nDisabling retries would shift the responsibility for handling network failures entirely to the client, increasing the chance of lost sales and leaving the system vulnerable to the same duplicate‑charge scenario if a client mistakenly retries anyway. The historical decision record explicitly rejected this alternative (ADR‑002, MENTOR‑003) in favor of a safer, idempotent design.\n\n---\n\n**Bottom line:** Implement a client‑provided idempotency key with per‑customer uniqueness enforcement. This satisfies the production safety requirement, eliminates duplicate charges, and preserves the ability for clients to retry safely.  \n\n*Sources: ADR‑002, COM‑002, INC‑002, MENTOR‑003, PR‑002.*",
+    "sources": [
+      {
+        "source_id": "ADR-002",
+        "title": "ADR: Duplicate payments on retry",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "COM-002",
+        "title": "Commit series: Duplicate payments on retry",
+        "type": "commit"
+      },
+      {
+        "source_id": "MENTOR-003",
+        "title": "Mentoring 03: Duplicate payments on retry (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "PR-002",
+        "title": "PR review: Duplicate payments on retry",
+        "type": "pull_request"
+      }
+    ]
+  },
+  "EVAL-004::baseline": {
+    "answer": "**Recommendation**\n\nDo **not** push the new recommendation feature to 100 % of traffic before the issue is investigated.  \nThe documented architectural decision and the associated run‑book explicitly call for a **controlled, measured rollback** and a **gradual re‑enable** only after the root cause of the latency spike has been understood and mitigated.\n\n**Why**\n\n| Evidence | Key point |\n|----------|-----------|\n| **ADR‑012** – “Risky recommendation rollout” | The team observed a higher p95 latency and error‑rate on the 20 % of sessions that were in the canary. The accepted decision was to *disable the canary, inspect high‑latency traces, and resume gradually only with measurable guardrails*; a “roll out globally and optimise afterwards” alternative was **rejected**. |\n| **DOC‑012** – system notes | Re‑states the same failure mode and the run‑book steps: disable the canary, collect logs/traces, reproduce the scenario in staging, and only re‑enable for 5 % of sessions once the error‑rate is stable. |\n| **PR‑012** – code‑review | Review feedback mirrors the ADR: *disable the canary, inspect traces, and resume gradually with guardrails*; the change is conditional on meeting the “stable error‑rate” criterion. |\n| **MENTOR‑016** – mentoring discussion | Reinforces the lower‑risk approach: “What metric tells us to stop the rollout…? …What lower‑risk option could address it? …Disable the canary, inspect high‑latency traces, and resume gradually only with measurable …”. |\n\nAll four sources converge on the same safe‑deployment pattern and explicitly **reject** a full‑scale rollout before the problem is understood.\n\n**Concrete next steps (aligned with the documented guardrails)**\n\n1. **Disable the canary flag** for the new recommendation algorithm.  \n2. **Collect and analyze** the high‑latency traces (the runbook in DOC‑012 describes where to look).  \n3. **Reproduce** the issue in a seeded staging environment to confirm the root cause.  \n4. **Implement** the necessary mitigation (e.g., algorithm tuning, caching, timeout adjustments).  \n5. **Re‑enable** the feature for a small, controlled percentage of traffic (e.g., 5 % as specified) and **monitor** p95 latency and error‑rate.  \n6. **Gradually increase** the rollout only while the metrics remain within the predefined thresholds.\n\n**Bottom line**\n\nGiven the documented evidence, the safest and most responsible course is to follow the **gradual, guarded rollout** process rather than a blanket global deployment. Deploying globally before investigation would repeat a known failure mode and violate the team’s accepted architectural decision.",
+    "sources": [
+      {
+        "source_id": "ADR-012",
+        "title": "ADR: Risky recommendation rollout",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "DOC-012",
+        "title": "Risky recommendation rollout: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "PR-012",
+        "title": "PR review: Risky recommendation rollout",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-016",
+        "title": "Mentoring 16: Risky recommendation rollout (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "PR-005",
+        "title": "PR review: Lost events after transaction",
+        "type": "pull_request"
+      }
+    ]
+  },
+  "EVAL-004::ask": {
+    "answer": "**Recommendation**\n\nDo **not** push the new recommendation algorithm to all users at this time.  \nKeep the feature flag in a controlled canary, disable it for the majority of traffic, and investigate the latency increase before any broader rollout.\n\n---\n\n### Why this is the safest course\n\n| Evidence | What it tells us |\n|----------|------------------|\n| **ADR‑012** – “Risky recommendation rollout” | The team previously accepted a decision to *disable the canary, inspect high‑latency traces, and resume gradually only with measurable guardrails* when the new algorithm caused higher p95 latency and error rates. |\n| **DOC‑012** – system notes | The same failure mode is documented: 20 % of sessions saw increased checkout latency. The runbook already describes how to reproduce the issue, collect logs, and verify a fix before expanding the rollout. |\n| **PR‑012** – code‑review comments | Alex reviewed the mitigation and required a failing regression test, explicit recovery steps, and a guard‑rail that the feature be re‑enabled only at 5 % traffic once error rates are stable. |\n| **MENTOR‑016** – mentoring dialogue | Alex emphasized the need for a clear stop‑metric (the canary’s higher p95/error) and suggested a lower‑risk option: disable the canary, investigate, then resume gradually with measurable guardrails. |\n\nAll four sources converge on the same pattern: **controlled rollouts** (see the “controlled_rollouts” decision pattern). The principle is to let observable evidence drive the next step, not to assume that post‑deployment optimization will be cheap or safe.\n\n---\n\n### Engineering reasoning (aligned with Alex’s decision‑making process)\n\n1. **Understand the problem** – The new recommendation algorithm is improving relevance but is *increasing checkout latency* for a significant minority (≈20 %) of sessions, as shown on the canary dashboards.  \n2. **Collect evidence** – Canary metrics (p95 latency, error rate) already indicate a regression; logs and distributed traces can pinpoint the hot path.  \n3. **Identify constraints** – Checkout latency directly impacts conversion and revenue; the production environment has a low tolerance for regressions.  \n4. **Compare alternatives**  \n   - **Global rollout now** – Fast to ship but violates the “production safety” principle, risks revenue loss, and creates a larger blast radius for any fix.  \n   - **Maintain canary, investigate, then gradual rollout** – Slower to ship but keeps risk bounded, gives measurable guardrails, and aligns with the team’s documented process.  \n5. **Evaluate risks** – Immediate global exposure could cause a noticeable degradation for many customers, increase support tickets, and erode trust. The controlled approach limits exposure to a small, observable cohort.  \n6. **Choose the simplest viable solution** – Keep the canary disabled for the majority, investigate, and only re‑enable at a low percentage once metrics are stable.  \n7. **Define validation & rollback** – Re‑enable at 5 % traffic, require stable p95 and error‑rate thresholds for a defined period (e.g., 30 min), then incrementally increase. If any regression re‑appears, roll back to 0 % immediately.\n\n---\n\n### Trade‑offs\n\n| Trade‑off | Impact |\n|-----------|--------|\n| **Speed of delivery** | Slower than an immediate global push, but the delay is justified by the risk to checkout latency. |\n| **Operational overhead** | Requires maintaining the feature flag, monitoring the canary, and running the regression test mandated in PR‑012. This is a modest increase in CI/CD and observability work. |\n| **Complexity** | Feature‑flag management adds a small amount of code and test matrix complexity, but it is a known, documented pattern (controlled_rollouts). |\n| **Future optimization** | Once the latency root cause is fixed, the algorithm can be rolled out more broadly with confidence, avoiding costly hot‑fixes later. |\n\n---\n\n### Actionable next steps\n\n1. **Disable the canary for all traffic** (set the flag to `false`).  \n2. **Gather diagnostics**  \n   - Pull high‑latency traces from the canary cohort (as described in DOC‑012).  \n   - Identify the code path or DB query that spikes latency.  \n3. **Write a regression test** that reproduces the latency spike (required by PR‑012).  \n4. **Fix the root cause** (e.g., query optimization, caching, or throttling).  \n5. **Re‑enable the feature at 5 % traffic** and set explicit guard‑rails:  \n   - p95 checkout latency must stay within X ms of the baseline.  \n   - Error rate must not exceed Y % above baseline.  \n6. **Monitor for a stable period** (e.g., 30 min). If metrics stay within thresholds, increase the rollout incrementally (10 % → 25 % → 100 %).  \n7. **Document the decision** in the ADR repository, noting the observed metrics, the fix, and the rollout schedule (mirroring the process in ADR‑012).\n\n---\n\n### Bottom line\n\nGiven the documented evidence and Alex Morgan’s low‑risk tolerance for production changes, the prudent recommendation is to **maintain the controlled canary, investigate the latency regression, and only expand the rollout once measurable guard‑rails are satisfied**. This aligns with the team’s established “controlled rollouts” pattern and protects checkout performance for customers.  \n\n*Sources: ADR‑012, DOC‑012, PR‑012, MENTOR‑016.*",
+    "sources": [
+      {
+        "source_id": "ADR-012",
+        "title": "ADR: Risky recommendation rollout",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "DOC-012",
+        "title": "Risky recommendation rollout: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "PR-012",
+        "title": "PR review: Risky recommendation rollout",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-016",
+        "title": "Mentoring 16: Risky recommendation rollout (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "PR-005",
+        "title": "PR review: Lost events after transaction",
+        "type": "pull_request"
+      }
+    ]
+  }
+}

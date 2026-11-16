@@ -1,0 +1,18 @@
+{
+  "EVAL-001": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "EVAL-002": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "EVAL-003": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "EVAL-004": {
+    "A": "ask",
+    "B": "baseline"
+  }
+}

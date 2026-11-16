@@ -1,0 +1,20 @@
+{
+  "dataset_sha256": "c6cf5200142b939f83f0a21f68cc80ea0acb254ee14d139cd756bfdcfa55841a",
+  "case_count": 60,
+  "modes": [
+    "baseline",
+    "ask"
+  ],
+  "top_k": 5,
+  "scoring": [
+    "decision_quality",
+    "context_adaptation",
+    "source_grounding",
+    "uncertainty",
+    "technical_safety"
+  ],
+  "scoring_range": [
+    0,
+    2
+  ]
+}

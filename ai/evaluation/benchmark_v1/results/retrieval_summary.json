@@ -1,0 +1,27 @@
+{
+  "benchmark": "knowledge_legacy_ai_pilot_v1",
+  "status": "PROVISIONAL_NOT_FINAL",
+  "ground_truth_review": "PENDING",
+  "top_k": 5,
+  "scoring_unit": "unique source_id",
+  "systems": {
+    "digital_twin": {
+      "evaluated_questions": 12,
+      "precision_at_5": 0.5333333333333333,
+      "recall_at_5": 0.875,
+      "f1_at_5": 0.655573593073593,
+      "ap_at_5": 0.697037037037037,
+      "mrr_at_5": 0.7222222222222223,
+      "ndcg_at_5": 0.6884526723225001
+    },
+    "baseline_rag": {
+      "evaluated_questions": 12,
+      "precision_at_5": 0.5666666666666665,
+      "recall_at_5": 0.9027777777777777,
+      "f1_at_5": 0.6858766233766233,
+      "ap_at_5": 0.7564814814814814,
+      "mrr_at_5": 0.7777777777777778,
+      "ndcg_at_5": 0.7345482114898454
+    }
+  }
+}
