@@ -6,7 +6,7 @@ import streamlit as st
 
 from api.backend_client import BackendError, check_health, send_chat
 
-APP_NAME = "Knowledge Legacy AI"
+APP_NAME = "My Legacy Mentor"
 
 MODES = {
     "ask": {
@@ -32,11 +32,16 @@ MODES = {
 # ---------------------------------------------------------
 
 _ICON_PATHS = {
-    "layers": (
-        '<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 '
-        '3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/>'
-        '<path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/>'
-        '<path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/>'
+    "brain": (
+        '<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>'
+        '<path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>'
+        '<path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/>'
+        '<path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/>'
+        '<path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/>'
+        '<path d="M3.477 10.896a4 4 0 0 1 .585-.396"/>'
+        '<path d="M19.938 10.5a4 4 0 0 1 .585.396"/>'
+        '<path d="M6 18a4 4 0 0 1-1.967-.516"/>'
+        '<path d="M19.967 17.484A4 4 0 0 1 18 18"/>'
     ),
     "user": (
         '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>'
@@ -71,6 +76,8 @@ def icon(name: str, size: int = 16) -> str:
 
 
 def render_html(markup: str) -> None:
+    """Render raw HTML. Lines are joined so markdown never treats
+    indentation as a code block."""
     compact = " ".join(line.strip() for line in markup.strip().splitlines())
     st.markdown(compact, unsafe_allow_html=True)
 
@@ -85,10 +92,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# -------------
-# Design system
-# -------------
-# (CSS Overrides)
+# ---------------------------------------------------------
+# Design system (Material Design 3 / Gemini Tonal Surfaces)
+# ---------------------------------------------------------
+
 st.markdown(
     """
     <style>
@@ -735,9 +742,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --------------
+# ---------------------------------------------------------
 # Session state
-# --------------
+# ---------------------------------------------------------
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -784,16 +791,16 @@ def status_pill(kind: str, text: str) -> None:
     )
 
 
-# ---------
+# ---------------------------------------------------------
 # Sidebar
-# ---------
+# ---------------------------------------------------------
 
 with st.sidebar:
 
     render_html(
         f"""
         <div class="brand">
-            <div class="brand-mark">{icon("layers", 18)}</div>
+            <div class="brand-mark">{icon("brain", 18)}</div>
             <div>
                 <div class="brand-name">{APP_NAME}</div>
                 <div class="brand-sub">Senior Digital Twin</div>
