@@ -29,3 +29,13 @@ class ChatResponse(BaseModel):
     answer: str
     mode: Literal["ask", "mentor"]
     sources: list[Source] = Field(default_factory=list)
+
+
+class DocumentResponse(BaseModel):
+    id: str
+    filename: str
+    content_type: str
+    size_bytes: int
+    status: Literal["uploaded", "processing", "ready", "failed"]
+    error_message: str | None = None
+    created_at: str

@@ -68,3 +68,26 @@ def init_db():
             ON messages(conversation_id, created_at)
         """)
 
+        # Store uploaded document metadata
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS documents (
+                id TEXT PRIMARY KEY,
+                filename TEXT NOT NULL,
+                storage_path TEXT NOT NULL,
+                content_type TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL
+                    CHECK (size_bytes >= 0),
+                status TEXT NOT NULL DEFAULT 'uploaded'
+                    CHECK (
+                        status IN (
+                            'uploaded',
+                            'processing',
+                            'ready',
+                            'failed'
+                        )
+                    ),
+                error_message TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+

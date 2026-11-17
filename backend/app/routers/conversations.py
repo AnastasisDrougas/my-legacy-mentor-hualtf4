@@ -33,4 +33,3 @@ def read_conversation(conversation_id: str):
         )
 
     return conversation
-

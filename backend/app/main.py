@@ -1,6 +1,6 @@
 
 from contextlib import asynccontextmanager
-
+from app.routers.documents import router as documents_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers.conversations import router as conversations_router
@@ -31,6 +31,7 @@ app.add_middleware(
 )
 
 app.include_router(chat_router)
+app.include_router(documents_router)
 app.include_router(conversations_router)
 
 

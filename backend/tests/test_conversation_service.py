@@ -50,4 +50,3 @@ def test_get_conversation_history():
 
 def test_unknown_conversation_history():
     assert get_conversation_history("unknown-id") is None
-
