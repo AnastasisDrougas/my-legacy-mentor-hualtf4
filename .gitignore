@@ -18,3 +18,5 @@ __pycache__/
 !.env.example
 ai/storage/
 *.sqlite3
+
+/backend/data/uploads/
