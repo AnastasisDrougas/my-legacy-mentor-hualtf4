@@ -10,7 +10,7 @@ class ChatRequest(BaseModel):
     @field_validator("question")
     @classmethod
     def validate_question(cls, value: str) -> str:
-        # Reject questions containing only whitespace
+        # Reject whitespace-only questions
         question = value.strip()
 
         if not question:
@@ -20,9 +20,9 @@ class ChatRequest(BaseModel):
 
 
 class Source(BaseModel):
-    document_id: str
+    source_id: str
     title: str
-    excerpt: str
+    type: str
 
 
 class ChatResponse(BaseModel):

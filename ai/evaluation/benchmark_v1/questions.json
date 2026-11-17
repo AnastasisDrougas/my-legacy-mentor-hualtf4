@@ -1,0 +1,98 @@
+[
+  {
+    "id": "DEV-001",
+    "category": "historical_adaptation",
+    "knowledge_status": "known",
+    "question": "An existing composite index helped order searches, but a new workload has slow writes and different filters. How should the team decide whether to retain the index?",
+    "source_topic": "ADR-001",
+    "split": "pilot"
+  },
+  {
+    "id": "DEV-002",
+    "category": "historical_adaptation",
+    "knowledge_status": "known",
+    "question": "A checkout client retries after losing the payment response. How should the service avoid creating a second payment intent?",
+    "source_topic": "ADR-002",
+    "split": "pilot"
+  },
+  {
+    "id": "DEV-003",
+    "category": "historical_adaptation",
+    "knowledge_status": "known",
+    "question": "Marketing emails overwhelm order confirmation messages while repeated failures keep reentering the queue. What architecture should be used?",
+    "source_topic": "ADR-003",
+    "split": "pilot"
+  },
+  {
+    "id": "DEV-004",
+    "category": "historical_adaptation",
+    "knowledge_status": "known",
+    "question": "An authenticated user can retrieve another customer's order by changing its ID. What should be fixed?",
+    "source_topic": "ADR-004",
+    "split": "pilot"
+  },
+  {
+    "id": "DEV-005",
+    "category": "historical_adaptation",
+    "knowledge_status": "known",
+    "question": "The database commits an order but the event broker occasionally fails. How should event delivery be designed?",
+    "source_topic": "ADR-005",
+    "split": "pilot"
+  },
+  {
+    "id": "DEV-006",
+    "category": "historical_adaptation",
+    "knowledge_status": "known",
+    "question": "A cached inventory page shows an item in stock although the last item has just sold. Where must correctness be enforced?",
+    "source_topic": "ADR-006",
+    "split": "pilot"
+  },
+  {
+    "id": "DEV-007",
+    "category": "historical_adaptation",
+    "knowledge_status": "known",
+    "question": "A new mandatory database field must be introduced while older application instances are still serving requests. What deployment sequence is safe?",
+    "source_topic": "ADR-007",
+    "split": "pilot"
+  },
+  {
+    "id": "DEV-008",
+    "category": "historical_adaptation",
+    "knowledge_status": "known",
+    "question": "One partner sends a heavy burst of requests that slows other customers. How should API access be controlled?",
+    "source_topic": "ADR-008",
+    "split": "pilot"
+  },
+  {
+    "id": "DEV-009",
+    "category": "historical_adaptation",
+    "knowledge_status": "known",
+    "question": "A checkout request is slow, but existing logs combine database and provider time into one duration. What information should be collected first?",
+    "source_topic": "ADR-009",
+    "split": "pilot"
+  },
+  {
+    "id": "DEV-010",
+    "category": "historical_adaptation",
+    "knowledge_status": "known",
+    "question": "A payment provider becomes intermittently slow and application workers begin accumulating. What protections should be added?",
+    "source_topic": "ADR-010",
+    "split": "pilot"
+  },
+  {
+    "id": "DEV-011",
+    "category": "historical_adaptation",
+    "knowledge_status": "known",
+    "question": "An API field has a new name, but some deployed clients still expect the original name. How should it evolve?",
+    "source_topic": "ADR-011",
+    "split": "pilot"
+  },
+  {
+    "id": "DEV-012",
+    "category": "historical_adaptation",
+    "knowledge_status": "known",
+    "question": "A limited rollout improves average latency but causes a subset of checkout requests to become much slower. What should the release team do?",
+    "source_topic": "ADR-012",
+    "split": "pilot"
+  }
+]

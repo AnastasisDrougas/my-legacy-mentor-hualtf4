@@ -1,0 +1,1532 @@
+{
+  "V3-01-01::baseline": {
+    "answer": "The fact that the query is still slow even though an index is being used tells us that the existing index does **not** match the way the query filters and orders the rows. In the incident and mentoring discussions the same symptom appears:\n\n* EXPLAIN QUERY PLAN shows a full scan on `orders(customer_id, created_at)` and the query touches tens of thousands of rows before the final filter — even though an index exists on those columns [MENTOR‑001][MENTOR‑002][INC‑001].\n\nBoth the mentor and the incident‑response notes recommend the same concrete remedy:\n\n> **Add a composite index on `(customer_id, created_at)`** (with the column order matching the filter and any ORDER BY clause) and then re‑evaluate the query plan.  \n\nThe architecture decision record (ADR‑001) reinforces that the index column order must follow the filter/sort pattern, and it warns that the new index will increase write cost and must be validated against realistic data skew.\n\n### Recommendation for Alex\n1. **Verify the current indexes** – confirm that there is no composite `(customer_id, created_at)` index (or that an existing one is defined in the wrong column order).  \n2. **Create the missing composite index** – e.g.  \n   ```sql\n   CREATE INDEX idx_orders_cust_created\n       ON orders (customer_id, created_at);\n   ```  \n3. **Re‑run EXPLAIN** – the plan should now show an index lookup instead of a full scan.  \n4. **Benchmark** – measure p95 latency; the target is < 180 ms as used in the commit guidelines (COM‑001).  \n5. **Monitor write latency** – because the new index adds overhead on inserts/updates; be ready to roll back if write performance regresses (as the incident response notes advise) [COM‑001][ADR‑001].\n\n### Bottom line\nYes – Alex should add a **new composite index** that matches the query’s filter and ordering pattern. The existing index is not being used effectively, and the evidence from multiple sources shows that adding the correct composite index is the low‑risk, tested fix for the observed latency.",
+    "sources": [
+      {
+        "source_id": "MENTOR-002",
+        "title": "Mentoring 02: Order lookup latency (incident response)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "MENTOR-001",
+        "title": "Mentoring 01: Order lookup latency (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "INC-001",
+        "title": "Incident: Order lookup latency",
+        "type": "incident"
+      },
+      {
+        "source_id": "COM-001",
+        "title": "Commit series: Order lookup latency",
+        "type": "commit"
+      },
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      }
+    ]
+  },
+  "V3-01-01::ask": {
+    "answer": "**RECOMMENDATION**  \nDo **not** add a new index yet. First verify why the current indexed plan is still slow (e.g., high row‑count scan, missing covering columns, column order mismatch). Use `EXPLAIN ANALYZE` to measure rows inspected and execution time, then adjust the existing index or query before creating another one.\n\n**HISTORICAL PRECEDENT**  \nWhen a slow order lookup showed a **full table scan** on `orders(customer_id, created_at)`, Alex’s team added a **composite index** on `(customer_id, created_at)` and removed the `SELECT *` projection, measuring the impact before any migration — see MENTOR‑001, MENTOR‑002, INC‑001, ADR‑001, COM‑001.\n\n**WHY IT APPLIES OR DIFFERS**  \n- *Matches*: The same table and query pattern (filter on `customer_id` and `created_at`) are involved, and the guiding principle is to let evidence drive the fix.  \n- *Differs*: In the historical case the plan showed **no index use**; here the plan already reports an index is being used. The lingering latency may stem from an index that is not selective enough, a non‑covering index, or an ordering mismatch, not from the absence of any index.\n\n**NEXT STEPS**  \n1. Run `EXPLAIN ANALYZE` for the slow query and record:\n   - Total rows examined vs. rows returned.  \n   - Whether the index is used for both filtering and ordering.  \n2. If the index is not covering, consider adding the needed columns to the existing composite index (making it a covering index) rather than creating a brand‑new one.  \n3. If the index is used but still scans many rows, evaluate whether a different column order or an additional predicate would make the index more selective; only then add a new composite index after measuring the change in latency.\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**MEDIUM** – The historical pattern supports adding a composite index when no index is used, but the current evidence (index already in use) is insufficient to conclude that another index will help. Missing are the detailed `EXPLAIN ANALYZE` metrics and the exact query shape (selected columns, ordering, predicates).",
+    "sources": [
+      {
+        "source_id": "MENTOR-002",
+        "title": "Mentoring 02: Order lookup latency (incident response)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "MENTOR-001",
+        "title": "Mentoring 01: Order lookup latency (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "INC-001",
+        "title": "Incident: Order lookup latency",
+        "type": "incident"
+      },
+      {
+        "source_id": "COM-001",
+        "title": "Commit series: Order lookup latency",
+        "type": "commit"
+      },
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      }
+    ]
+  },
+  "V3-01-02::baseline": {
+    "answer": "**Short answer:**  \nCopying the historical indexing fix (the composite `(customer_id, created_at)` index) may improve the read‑side latency you’re seeing, but it will also increase the cost of every write. Because you are already hitting SQLite lock‑contention with ~20 concurrent writers, adding the index could make the write‑side problem worse. The safest approach is to **validate the change in a staging environment first** and be prepared to roll it back if write latency or lock‑frequency rises.\n\n---\n\n### Why the index helps reads\n\nAll of the retrieved artifacts (COM‑001, DOC‑001, ADR‑001, MENTOR‑001/002) describe the same “historical indexing fix” that was introduced to solve an order‑lookup latency problem:\n\n* **Add a composite index on `(customer_id, created_at)`** – the column order matches the filter and sort pattern, which lets SQLite use an index range scan instead of a full table scan.  \n* The fix was validated by measuring **p50/p95 latency** on a seeded workload and required **p95 < 180 ms** before it could be landed.  \n\nThese sources also note that the index **increases write cost** and must be verified against realistic data skew (COM‑001, DOC‑001, ADR‑001).\n\n### How that interacts with 20 concurrent writers\n\nSQLite uses a **single‑writer lock** (the “database lock” or “write‑ahead log lock”). When many processes try to write at the same time, they contend for that lock and you see “database is locked” errors. Adding an index makes each `INSERT/UPDATE/DELETE` touch additional B‑tree pages, which:\n\n1. **Lengthens the write transaction** (more pages to modify, more WAL frames to flush).  \n2. **Increases the window during which the writer holds the lock**, raising the probability that another writer will be blocked and eventually error out.\n\nThe evidence explicitly calls out this trade‑off:\n\n> “The index increases write cost and requires verification against realistic data skew.” – COM‑001, DOC‑001, ADR‑001  \n\nTherefore, copying the index **without testing** could exacerbate the lock‑contention you’re already experiencing.\n\n### Recommended validation steps (based on the documented process)\n\n1. **Create a staging copy of production data** (or a seeded dataset that mimics the real skew).  \n2. **Apply the composite index** exactly as in the historical fix.  \n3. Run the same read‑heavy workload you expect in production and measure **p50/p95 latency**; confirm it meets the target (e.g., p95 < 180 ms).  \n4. **Run a concurrent‑writer benchmark** with ~20 simultaneous writers (or more) and record:  \n   * Write latency distribution (p50/p95).  \n   * Frequency of “database is locked” errors.  \n5. **Compare against the baseline** (no index). If write latency or lock errors regress, **drop the index** and revert the query change, as the rollback procedure states in all sources.  \n\n> “Drop the new index and revert the query change if write latency or query plans regress.” – COM‑001, DOC‑001, ADR‑001, MENTOR‑002  \n\n### Decision guidance\n\n| Situation | Action |\n|-----------|--------|\n| **Read latency is the primary pain point** and you can tolerate a modest increase in write cost (e.g., write latency stays well below your SLA) | Apply the index after the staged validation. |\n| **Write contention is already causing errors** (as you described) and you cannot afford any increase in write duration | **Do not copy the index yet**. Instead consider alternatives:  \n  * Reduce concurrent writers (queue writes, batch them).  \n  * Move to a DBMS with true multi‑writer concurrency (e.g., PostgreSQL) – the ADR explicitly kept migration as a *future* option.  \n  * Investigate SQLite WAL mode tuning (e.g., larger journal size, `busy_timeout`). |\n| **Both read and write latency are borderline** | Perform the staged test; if the index improves reads but harms writes beyond acceptable limits, keep the index disabled and explore a migration or architectural change. |\n\n### Bottom line\n\nThe historical indexing fix is **useful for read‑side performance**, but because SQLite’s single‑writer lock makes write contention sensitive to any extra write work, you should **not copy it blindly**. Follow the documented validation workflow (measure p50/p95 latency, watch for write‑latency regression, be ready to drop the index) before promoting the change to production. If the validation shows that the index pushes write latency or lock errors over your tolerances, keep the schema as‑is and consider a migration to a multi‑writer database such as PostgreSQL.  \n\n**Citations:** COM‑001, DOC‑001, ADR‑001, MENTOR‑001, MENTOR‑002.",
+    "sources": [
+      {
+        "source_id": "COM-001",
+        "title": "Commit series: Order lookup latency",
+        "type": "commit"
+      },
+      {
+        "source_id": "DOC-001",
+        "title": "Order lookup latency: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-002",
+        "title": "Mentoring 02: Order lookup latency (incident response)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "MENTOR-001",
+        "title": "Mentoring 01: Order lookup latency (diagnosis)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  "V3-01-02::ask": {
+    "answer": "**RECOMMENDATION**  \nDo **not** copy the historical composite‑index fix as a first step. Instead, first verify whether the lock errors are caused by SQLite’s default locking model and whether a lower‑risk change (e.g., enabling WAL mode or reducing concurrent writers) resolves the issue. Only after measuring the write‑latency impact should you consider adding an index or migrating to PostgreSQL.\n\n**HISTORICAL PRECEDENT**  \nThe team previously addressed a read‑latency problem by adding a composite index on `(customer_id, created_at)` and then measuring query latency before any database migration. The decision was documented as a conditional, evidence‑driven step with an explicit rollback path because the index **increases write cost** and must be validated against realistic data skew【ADR-001】,【COM-001】,【DOC-001】.\n\n**WHY IT APPLIES OR DIFFERS**  \n*Matching aspects* – Both situations involve SQLite and a desire to improve production behavior without a wholesale migration. The “measure before you migrate” mindset is directly applicable【ADR-001】.  \n*Differences* – The historical fix targeted **read** performance; the current problem is **write‑contention** (20 concurrent writers causing lock errors). Adding the same index would *increase* write overhead, potentially worsening the lock situation, which the original decision explicitly warned about【ADR-001】. Therefore the exact index change is not a suitable remedy for write‑locking issues.\n\n**NEXT STEPS**  \n1. **Reproduce the lock error in a staging environment** and capture metrics (write latency, lock wait time, number of writers).  \n2. **Enable SQLite WAL (Write‑Ahead Logging) mode** (or adjust journal mode) and retest the same concurrent‑writer workload; WAL allows readers and a single writer to proceed concurrently, reducing lock contention.  \n3. If WAL does not bring lock errors within acceptable limits, **measure the impact of adding the composite index** on write latency (p95) using the same seeded workload, following the validation criteria from the historical decision (p95 < 180 ms)【ADR-001】.  \n4. Should both steps fail to meet reliability targets, **evaluate a migration to PostgreSQL**, again measuring read/write latency before committing.\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**MEDIUM** – The evidence clearly shows the index fix was for read latency and that it raises write cost, which suggests it may not help the current write‑locking problem. However, we lack direct measurements of how WAL or the index affect the specific 20‑writer contention scenario, so further data collection is required.",
+    "sources": [
+      {
+        "source_id": "COM-001",
+        "title": "Commit series: Order lookup latency",
+        "type": "commit"
+      },
+      {
+        "source_id": "DOC-001",
+        "title": "Order lookup latency: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-002",
+        "title": "Mentoring 02: Order lookup latency (incident response)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "MENTOR-001",
+        "title": "Mentoring 01: Order lookup latency (diagnosis)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  "V3-01-03::baseline": {
+    "answer": "The team should **remove the composite index and roll back the query change** until the write‑latency impact can be verified and mitigated.\n\n* The documented “operational recovery” step for this situation is to *drop the new index and revert the query change if write latency or query plans regress*【DOC-001】.  \n* Both the mentoring notes and the incident post‑mortem call out the same caveat: the index **increases write cost** and must be validated against realistic data‑skew patterns【MENTOR-002】.  \n* The architecture decision record (ADR‑001) records the same recommendation – add the index only after measuring the query and only if the write‑path impact is acceptable【ADR-001】.\n\nTherefore, the prudent decision is to:\n\n1. **Drop the (customer_id, created_at) composite index** (and restore the original query).  \n2. **Add a regression test** that monitors write‑latency (p50/p95) alongside read‑latency to catch similar regressions early.  \n3. **Re‑evaluate the index** only after the test proves that the write‑path impact stays within acceptable limits and the data distribution is realistic.\n\nThis approach follows the documented recovery procedure and respects the known trade‑off that the index improves read performance but can degrade writes.",
+    "sources": [
+      {
+        "source_id": "MENTOR-002",
+        "title": "Mentoring 02: Order lookup latency (incident response)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "DOC-001",
+        "title": "Order lookup latency: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "MENTOR-001",
+        "title": "Mentoring 01: Order lookup latency (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "INC-001",
+        "title": "Incident: Order lookup latency",
+        "type": "incident"
+      },
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      }
+    ]
+  },
+  "V3-01-03::ask": {
+    "answer": "**RECOMMENDATION**  \nDrop the composite index on `(customer_id, created_at)` (and revert any query changes that depend on it) until write latency is verified to be acceptable, then re‑measure both write and read performance before deciding on a new indexing strategy.\n\n**HISTORICAL PRECEDENT**  \n- Alex Morgan’s accepted ADR added the same composite index to fix read latency, explicitly noting *“the index increases write cost and requires verification against realistic data skew”*【DOC-001】.  \n- The same documents also prescribe the operational recovery step: *“Drop the new index and revert the query change if write latency or query plans regress.”*【DOC-001】【MENTOR-002】.  \n\n**WHY IT APPLIES OR DIFFERS**  \n- **Matches**: The current symptom (write‑latency regression) is exactly the condition under which the historical guidance says to drop the index.  \n- **Differs**: The original justification (read‑latency improvement) may no longer outweigh the write cost, so the simple “add‑index” fix is no longer appropriate without fresh measurements.\n\n**NEXT STEPS**  \n1. **Rollback** – In a controlled rollout (ideally first in staging, then production), drop the `(customer_id, created_at)` index and revert any SELECT‑* changes that were introduced alongside it.  \n2. **Validate** – Run the regression test suite that compares p50/p95 write latency and query plans under a realistic seeded workload; require write latency to stay within the pre‑change baseline.  \n3. **Iterate** – If read latency remains a problem, experiment with alternative indexing approaches (e.g., different column order, covering index) and repeat the measurement step before committing any new index.\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**MEDIUM** – The evidence directly supports dropping the index when writes regress, but we lack current quantitative data on write volume, data skew, and the exact impact of the index on reads. Those measurements would be needed to decide whether a different index or a migration is the better long‑term solution.",
+    "sources": [
+      {
+        "source_id": "MENTOR-002",
+        "title": "Mentoring 02: Order lookup latency (incident response)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "DOC-001",
+        "title": "Order lookup latency: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "MENTOR-001",
+        "title": "Mentoring 01: Order lookup latency (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "INC-001",
+        "title": "Incident: Order lookup latency",
+        "type": "incident"
+      },
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      }
+    ]
+  },
+  "V3-01-04::baseline": {
+    "answer": "When a client cannot be upgraded for an extended period (e.g., six months), the safest way to retire a field in an API response is to **deprecate it gradually rather than removing it outright**. The evidence from the team’s own decision‑making process describes exactly this low‑risk pattern:\n\n1. **Keep the existing field alive** – leave the original field (e.g., `total_amount`) in the response so that the old client continues to work unchanged.  \n2. **Introduce the new field additively** – add the replacement field (e.g., `gross_amount`) alongside the old one, without removing or renaming the original.  \n3. **Mark the old field as deprecated** – document that the field will be removed after a defined deprecation window and, if possible, include a version‑specific deprecation notice in the API schema (e.g., an OpenAPI `deprecated: true` flag or a response header).  \n4. **Define a deprecation window that matches the client’s upgrade horizon** – in this case a six‑month window gives the mobile team enough time to ship the update.  \n5. **Add consumer‑contract tests for both versions** – ensure that your test suite validates that the API still satisfies the old client contract (expects `total_amount`) **and** the new client contract (expects the new field). This prevents regressions when the old field is eventually removed【MENTOR-015】.  \n6. **Communicate the timeline** – publish the deprecation schedule in the API changelog, release notes, and any developer portal, giving the mobile team a clear deadline.  \n7. **Monitor usage** – track how many clients are still sending/receiving the deprecated field. When usage drops to zero (or after the six‑month period elapses), you can safely delete the field.  \n\nThe team’s formal architectural decision record (ADR‑011) records exactly this approach as the accepted solution, rejecting the alternative of forcing an immediate client upgrade【ADR-011】. The pull‑request review (PR‑011) also required a regression test that exercises both the old and new payloads before the change could be merged【PR-011】.\n\n**In short:** Restore the old field, add the new field side‑by‑side, mark the old one as deprecated, enforce a six‑month deprecation window with contract tests, and communicate the schedule to the mobile team. After the window, remove the deprecated field. This additive‑deprecation strategy avoids breaking the existing client while giving it ample time to upgrade.",
+    "sources": [
+      {
+        "source_id": "MENTOR-015",
+        "title": "Mentoring 15: Breaking API response (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "ADR-011",
+        "title": "ADR: Breaking API response",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "PR-011",
+        "title": "PR review: Breaking API response",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "DOC-011",
+        "title": "Breaking API response: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "MENTOR-012",
+        "title": "Mentoring 12: Partner traffic spikes (diagnosis)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  "V3-01-04::ask": {
+    "answer": "**RECOMMENDATION**  \nAdd the new field **in addition to** the existing one, keep the old field functional for a defined deprecation window (e.g., 6 months), and require both fields to be present in contract tests for all supported client versions. After the window, remove the old field.\n\n**HISTORICAL PRECEDENT**  \nWhen a mobile client crashed after an optional field was renamed, the team restored the original field, introduced the new field additively, and defined a deprecation window with consumer contract tests [ADR‑011][DOC‑011][PR‑011][MENTOR‑015].\n\n**WHY IT APPLIES OR DIFFERS**  \n*Matches*:  \n- The current constraint is exactly the same: a mobile client cannot be upgraded for six months, so removing the field would break that client.  \n- The earlier decision was driven by evidence that older client versions still expected the original field.  \n\n*Differs*:  \n- No new technical constraints (e.g., storage limits, serialization size) have been reported, so the same additive approach remains appropriate. If such constraints existed, a different trade‑off might be needed.\n\n**NEXT STEPS**  \n1. **Schema change**: Keep the existing field (e.g., `total_amount`) and add the new field (e.g., `order_total`). Mark the old field as *deprecated* in the OpenAPI/Swagger spec.  \n2. **Contract tests**: Extend the test suite to validate payloads for both the current client version and the oldest supported version, ensuring both fields are present and correctly populated.  \n3. **Deprecation policy**: Publish a deprecation timeline (e.g., “field will be removed after 2027‑05‑01”) to all API consumers, and monitor usage metrics to confirm that no active client still relies on the old field before removal.\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**HIGH** – The recommendation directly mirrors a documented, accepted architectural decision that addressed the identical problem (mobile client unable to upgrade) and is supported by multiple sources. No additional evidence is required beyond confirming that no new constraints have emerged.",
+    "sources": [
+      {
+        "source_id": "MENTOR-015",
+        "title": "Mentoring 15: Breaking API response (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "ADR-011",
+        "title": "ADR: Breaking API response",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "PR-011",
+        "title": "PR review: Breaking API response",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "DOC-011",
+        "title": "Breaking API response: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "MENTOR-012",
+        "title": "Mentoring 12: Partner traffic spikes (diagnosis)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  "V3-01-05::baseline": {
+    "answer": "Alex would follow a disciplined, data‑driven workflow that mirrors the process documented for the order‑lookup latency problem:\n\n1. **Re‑create the production‑scale workload in staging**  \n   *The runbook for this issue describes “how to reproduce the scenario in a seeded staging environment”* [DOC-001]. By loading a representative volume of rows (the production table is orders ≈ hundreds of thousands versus a few dozen in staging) Alex can make the same query patterns that cause the slowdown.\n\n2. **Inspect the query plan**  \n   Before any code change Alex runs `EXPLAIN QUERY PLAN` on the target query. The documented symptom is a *full scan on `orders(customer_id, created_at)`* that returns ~38 k rows before filtering [DOC-001][PR-001][MENTOR-001]. Seeing this plan confirms that the optimizer is not using an index.\n\n3. **Apply the low‑risk optimization**  \n   - Add a **composite index** on `(customer_id, created_at)`.  \n   - Remove the `SELECT *` projection (fetch only needed columns).  \n   These steps are the recommended fix in the incident review and ADR [PR-001][ADR-001].\n\n4. **Measure before‑and‑after latency**  \n   Alex records the **p50 and p95** request latencies for the GET `/orders/{id}` endpoint both **pre‑ and post‑change**. The acceptance criterion in the runbook is “Compare p50/p95” [PR-001]. The same metrics were used in the original incident (p95 rose from 90 ms to 760 ms) [DOC-001][INC-001].\n\n5. **Add a regression test**  \n   To guarantee that the fix remains effective, Alex adds a failing test that reproduces the full‑scan plan and asserts that the new index is used. This was explicitly requested in the PR review [PR-001].\n\n6. **Validate in staging, then roll out**  \n   After the staging run shows the query plan now uses the composite index and latency drops back to the baseline (≈ 90 ms p95), Alex can promote the change to production with confidence.\n\nIn summary, Alex validates the optimization by **re‑creating production‑scale data in staging, examining the query plan, applying a targeted index and projection change, and then quantitatively comparing latency (p50/p95) before and after the change, backed by a regression test** [DOC-001][PR-001][MENTOR-001][ADR-001].",
+    "sources": [
+      {
+        "source_id": "DOC-001",
+        "title": "Order lookup latency: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "PR-001",
+        "title": "PR review: Order lookup latency",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-001",
+        "title": "Mentoring 01: Order lookup latency (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "INC-001",
+        "title": "Incident: Order lookup latency",
+        "type": "incident"
+      },
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      }
+    ]
+  },
+  "V3-01-05::ask": {
+    "answer": "**RECOMMENDATION**  \nAdd a composite index on `(customer_id, created_at)` and remove the `SELECT *` projection, then measure the query latency (p50/p95) on a production‑sized dataset before declaring the optimization successful.\n\n**HISTORICAL PRECEDENT**  \nWhen the same latency regression was observed, Alex required concrete evidence (EXPLAIN QUERY PLAN showed a full scan on `orders(customer_id, created_at)` returning ~38 k rows) and recommended exactly this index plus a projection change, with the fix validated by comparing p50/p95 latency before and after the change【DOC-001】【PR-001】【ADR-001】.\n\n**WHY IT APPLIES OR DIFFERS**  \n*Matches*:  \n- The root cause is identical – a full‑table scan on a large production table.  \n- The same query pattern (`WHERE customer_id = … ORDER BY created_at …`) is implicated.  \n\n*Differs*:  \n- Staging currently holds a small slice of data, so the index’s impact cannot be observed there without seeding production‑scale rows.  \n- Production may have different write‑load characteristics, so the write‑cost of the new index must be measured.\n\n**NEXT STEPS**  \n1. **Reproduce the workload** – Load a realistic volume of orders (matching production size) into a staging copy of the database.  \n2. **Run diagnostics** – Execute `EXPLAIN QUERY PLAN` for the target query to confirm the full scan, then apply the composite index and re‑run the plan.  \n3. **Benchmark** – Capture p50/p95 latency (or query execution time) before and after the index, using the same seeded data; add a regression test that asserts the post‑change latency stays within the target threshold.  \n\n**CONFIDENCE & MISSING EVIDENCE**  \n**MEDIUM** – The historical pattern directly addresses the same symptom and provides a concrete validation workflow, but we lack current production metrics (row count, write rate) to fully quantify the write‑overhead trade‑off. Gathering those metrics would raise confidence to HIGH.",
+    "sources": [
+      {
+        "source_id": "DOC-001",
+        "title": "Order lookup latency: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "PR-001",
+        "title": "PR review: Order lookup latency",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-001",
+        "title": "Mentoring 01: Order lookup latency (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "INC-001",
+        "title": "Incident: Order lookup latency",
+        "type": "incident"
+      },
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      }
+    ]
+  },
+  "V3-01-06::baseline": {
+    "answer": "No – the queue growth is a symptom of a deeper workload‑management problem, not a lack of raw processing capacity.  \n\nAll of the documented investigations (PR‑003, MENTOR‑005, ADR‑003, INC‑003) observed the same pattern:\n\n* **Queue depth kept rising** while the **average worker latency stayed around 450 ms**.  \n* The **retry fraction increased** during the burst.  \n\nWhen the processing time per message is already low, simply adding more workers only masks the issue and can even exacerbate it (more concurrent retries, higher contention for downstream resources). The accepted architectural decision explicitly rejected “increase worker count indefinitely” as a solution and instead prescribed a lower‑risk, more robust mitigation:\n\n1. **Separate transactional (e.g., order‑confirmation) messages from bulk email workloads** so that latency‑sensitive traffic is not delayed by large marketing bursts.  \n2. **Cap retries and apply exponential back‑off** to prevent retry storms from inflating the queue.  \n3. **Add dead‑letter handling** for messages that repeatedly fail, keeping them out of the main queue.  \n\nThe fix was validated by load‑testing at 5× peak mail traffic and confirming that transactional‑queue delay stayed below the service‑level target (see PR‑003, ADR‑003).  \n\n**What to do next**\n\n* Implement the separation of transactional vs. bulk queues, retry caps, and dead‑letter routing as described.  \n* Add automated regression tests that simulate a high‑volume burst and verify that the transactional queue remains shallow.  \n* After the mitigation is in place and verified, re‑measure queue depth; only then consider scaling the worker pool if the workload genuinely exceeds the processing capacity.\n\nSo, simply adding workers is not the recommended first step; address the workload‑type separation, retry handling, and dead‑lettering before scaling.  \n\n**Citations:** [PR-003] , [MENTOR-005] , [ADR-003] , [INC-003]",
+    "sources": [
+      {
+        "source_id": "PR-003",
+        "title": "PR review: Email queue pressure",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-005",
+        "title": "Mentoring 05: Email queue pressure (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "DOC-003",
+        "title": "Email queue pressure: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-003",
+        "title": "ADR: Email queue pressure",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-003",
+        "title": "Incident: Email queue pressure",
+        "type": "incident"
+      }
+    ]
+  },
+  "V3-01-06::ask": {
+    "answer": "**RECOMMENDATION**  \nDo not add workers as a first remedy. Instead, isolate transactional email messages from bulk‑mail traffic, cap retry attempts with exponential back‑off, and route permanently failing messages to a dead‑letter queue. Verify the fix with a load‑test at 5× peak mail traffic before considering any horizontal scaling.\n\n**HISTORICAL PRECEDENT**  \nWhen the same symptom appeared (queue depth rising while per‑message latency stayed ~450 ms and the retry fraction increased), the team chose to *separate transactional from bulk workloads, add retry caps with back‑off, and introduce dead‑letter handling* rather than scaling workers indefinitely【ADR-003】. The same reasoning was reflected in the PR review, incident post‑mortem, run‑book, and mentoring discussion【PR-003】【INC-003】【DOC-003】【MENTOR-005】.\n\n**WHY IT APPLIES OR DIFFERS**  \n*Matches*:  \n- Queue depth is growing despite fast processing.  \n- Retry fraction is increasing, indicating that messages are being re‑queued repeatedly and starving fresh traffic.  \n\n*Differs*:  \n- If the current environment already has separate queues or retry caps, the root cause may be elsewhere (e.g., a downstream SMTP throttling issue). In that case the same pattern would still suggest confirming the isolation and back‑off settings before scaling.\n\n**NEXT STEPS**  \n1. **Instrument the queue** – capture per‑message type (transactional vs. bulk), retry count, and back‑off timing.  \n2. **Implement the separation** – route transactional emails to a dedicated, higher‑priority queue; bulk emails to a separate queue with its own worker pool. Add exponential‑backoff limits and a dead‑letter queue for messages that exceed the retry cap.  \n3. **Validate** – run a load‑test at 5× expected peak mail traffic and confirm that transactional queue latency stays within the service‑level target (as required by the ADR acceptance criteria)【ADR-003】.\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**HIGH** – The current symptom set exactly matches the documented incident and ADR that led to the separation‑and‑back‑off solution. The only missing evidence would be a measurement confirming that retries are indeed the dominant contributor to the backlog; collecting that metric is step 1 above.",
+    "sources": [
+      {
+        "source_id": "PR-003",
+        "title": "PR review: Email queue pressure",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-005",
+        "title": "Mentoring 05: Email queue pressure (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "DOC-003",
+        "title": "Email queue pressure: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-003",
+        "title": "ADR: Email queue pressure",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-003",
+        "title": "Incident: Email queue pressure",
+        "type": "incident"
+      }
+    ]
+  },
+  "V3-01-07::baseline": {
+    "answer": "**Balancing fairness and availability when a single partner consumes most of the API capacity**\n\n| Goal | Recommended technical treatment | Rationale |\n|------|--------------------------------|-----------|\n| **Prevent a noisy partner from starving other customers** | **Apply per‑client token‑bucket limits** (rate‑limit each API key independently). | The observed failure mode was that one partner’s traffic saturated the request workers and forced regular customers into time‑outs. A per‑client bucket isolates each tenant’s burst capacity while still allowing the partner to use a large share of the overall quota. [ADR‑008] |\n| **Give the partner a predictable, high‑capacity experience** | **Allocate a larger bucket (or a dedicated quota) for that partner** and publish the limits in the API contract. | The partner is a valuable customer, so the bucket can be sized to meet their business needs, but it is still bounded so that a sudden spike cannot exceed the bucket and cause 429s for everyone else. |\n| **Make throttling transparent and recoverable** | **Return `429 Too Many Requests` with a `Retry‑After` header**. | Publishing retry‑after semantics lets the partner back‑off gracefully and reduces the retry‑storm that amplified the problem. [MENTOR‑012] |\n| **Keep health‑check traffic reliable** | **Exempt health‑check requests from the rate‑limit** (or give them a separate, unlimited bucket). | This ensures the gateway remains observable even when the partner is at its limit. [ADR‑008] |\n| **Avoid a blunt “global limit for everybody”** | **Do not use a single global request limit**; it would punish all customers for one partner’s behavior and provides no fairness guarantees. [MENTOR‑012] |\n| **Validate the mitigation** | **Load‑test a mixed‑tenant workload** and verify that abusive clients cannot push regular traffic into time‑outs. | The decision record requires a conditional validation step; if measurements change, the limits should be revisited. [ADR‑008], [PR‑008] |\n| **Operational monitoring** | **Continuously track per‑key request rates and 429 bursts**; adjust bucket sizes or add a dedicated quota if the partner’s usage pattern evolves. | The architecture decision is deliberately conditional on future measurements. [ADR‑008] |\n\n### Practical steps\n\n1. **Implement per‑client token‑bucket middleware** in the public API gateway.  \n2. **Configure the partner’s bucket** with a higher refill rate and burst size than the default tenant bucket, reflecting their business importance.  \n3. **Add `Retry‑After` headers** to all 429 responses so callers can back‑off correctly.  \n4. **Whitelist health‑check endpoints** from the rate‑limit logic.  \n5. **Deploy a regression test** that simulates mixed traffic (partner + regular customers) and asserts that regular requests are not timed‑out. [PR‑008]  \n6. **Monitor** the proportion of traffic per API key; if the partner again approaches > 68 % of peak traffic, consider negotiating a dedicated capacity contract or further tuning the bucket.  \n\n### Summary\n\nFairness is achieved by **isolating each client’s request rate** with per‑client token‑bucket limits, while availability for the valuable partner is preserved by **granting them a larger, negotiated bucket** and by **making throttling transparent** through `Retry‑After`. Health‑check traffic remains exempt, and the solution is validated with load‑testing and continuous monitoring. This approach directly addresses the partner‑spike problem without resorting to a single global limit that would penalize all users. [MENTOR‑012] [ADR‑008] [DOC‑008] [PR‑008]",
+    "sources": [
+      {
+        "source_id": "MENTOR-012",
+        "title": "Mentoring 12: Partner traffic spikes (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "ADR-008",
+        "title": "ADR: Partner traffic spikes",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "DOC-008",
+        "title": "Partner traffic spikes: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "MENTOR-003",
+        "title": "Mentoring 03: Duplicate payments on retry (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "PR-008",
+        "title": "PR review: Partner traffic spikes",
+        "type": "pull_request"
+      }
+    ]
+  },
+  "V3-01-07::ask": {
+    "answer": "**RECOMMENDATION**  \nImplement per‑client token‑bucket rate limits on the public API gateway, giving the high‑traffic partner a quota that reflects its business value but still caps its maximum request rate. Publish `Retry‑After` headers on 429 responses and exempt health‑check traffic from the limits.\n\n**HISTORICAL PRECEDENT**  \nWhen a single partner’s API key generated ~68 % of peak traffic and caused request‑worker saturation, the team chose per‑client token‑bucket limits (instead of a single global limit), added `Retry‑After` semantics, and exempted health checks [ADR‑008][DOC‑008][MENTOR‑012][PR‑008].\n\n**WHY IT APPLIES OR DIFFERS**  \n*Matches*:  \n- The current problem is the same pattern – one partner consuming a disproportionate share of capacity and threatening availability for other customers.  \n- The production impact (timeouts for regular customers) and the observed metric (dominant traffic from one API key) are identical to the documented case.  \n\n*Differs / Needs Confirmation*:  \n- The partner is described as “valuable,” so the quota may need to be higher than a generic limit. The historical decision left the exact quota open to measurement‑driven adjustment, so we must gather current traffic data to size the quota appropriately.\n\n**NEXT STEPS**  \n1. **Measure** the partner’s current request rate, burst characteristics, and the impact on latency/timeouts for other tenants.  \n2. **Define** a fair per‑client quota (e.g., X req/s with Y‑second burst capacity) that reflects the partner’s business importance while preserving headroom for other customers.  \n3. **Deploy** the token‑bucket limiter with `Retry‑After` headers, exempt health‑check endpoints, and add a regression test that simulates mixed‑tenant load to verify the guardrail.  \n\n**CONFIDENCE & MISSING EVIDENCE**  \n**MEDIUM** – The pattern directly matches the documented scenario, giving strong guidance. However, we lack up‑to‑date measurements for this specific partner’s traffic and the exact quota that balances fairness with the partner’s value, so those data are needed before finalizing the limits.",
+    "sources": [
+      {
+        "source_id": "MENTOR-012",
+        "title": "Mentoring 12: Partner traffic spikes (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "ADR-008",
+        "title": "ADR: Partner traffic spikes",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "DOC-008",
+        "title": "Partner traffic spikes: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "MENTOR-003",
+        "title": "Mentoring 03: Duplicate payments on retry (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "PR-008",
+        "title": "PR review: Partner traffic spikes",
+        "type": "pull_request"
+      }
+    ]
+  },
+  "V3-01-08::baseline": {
+    "answer": "No – a migration that only passes unit‑tests is **not** guaranteed to be safe when the old and the new versions of the application are running side‑by‑side.\n\nThe evidence that describes a production‑ready zero‑downtime change repeatedly stresses a **mixed‑version deployment test** as an essential acceptance criterion:\n\n* “Run mixed‑version deployment tests and check no insert failures or lock spikes during backfill.” [COM-007]  \n* The same requirement appears in the system notes and the ADR: “Validation: Run mixed‑version deployment tests and check no insert failures or lock spikes during backfill.” [DOC-007][ADR-007]  \n\nThese tests verify that:\n\n1. **Both old and new code can write to the schema** (the old version must still be able to insert rows that lack the new column, and the new version must handle rows that still have the old shape).  \n2. **Back‑fill jobs do not cause locking or performance regressions** that could affect the live traffic.  \n3. **Rollback is possible** by keeping the backward‑compatible column and never dropping populated data blindly. [COM-007][DOC-007][ADR-007]\n\nUnit tests alone exercise a single version of the code against a controlled database state; they do **not** simulate the concurrency, timing, and data‑shape mismatches that occur when two versions coexist in production. The mentoring and PR discussions also point out concrete failure modes when a NOT‑NULL constraint is applied before the back‑fill completes, causing older workers to fail inserting rows [MENTOR-011][PR-007].\n\nTherefore, before declaring the deployment safe you should:\n\n1. **Apply the “expand‑backfill‑contract” pattern** – add a nullable column, deploy dual‑compatible application code, backfill in batches, then enforce the NOT‑NULL constraint. [ADR-007]  \n2. **Run the mixed‑version deployment test** that inserts rows with both code versions and monitors for insert errors or lock spikes. [COM-007][DOC-007]  \n3. **Document and verify the rollback procedure** that retains the backward‑compatible column. [COM-007][DOC-007]\n\nOnly after those steps pass can you consider the migration safe for a zero‑downtime rollout. If you have not performed the mixed‑version test, the deployment is **not** yet safe.",
+    "sources": [
+      {
+        "source_id": "COM-007",
+        "title": "Commit series: Zero-downtime schema change",
+        "type": "commit"
+      },
+      {
+        "source_id": "DOC-007",
+        "title": "Zero-downtime schema change: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-007",
+        "title": "ADR: Zero-downtime schema change",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-011",
+        "title": "Mentoring 11: Zero-downtime schema change (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "PR-007",
+        "title": "PR review: Zero-downtime schema change",
+        "type": "pull_request"
+      }
+    ]
+  },
+  "V3-01-08::ask": {
+    "answer": "**RECOMMENDATION**  \nDelay the production rollout until you have verified a *zero‑downtime, mixed‑version* migration: add the new schema element in a backward‑compatible way, deploy code that works with both old and new schemas, run a staged backfill, and only then enforce any new constraints.\n\n**HISTORICAL PRECEDENT**  \nThe team previously handled schema changes with the “expand‑backfill‑contract” pattern:  \n* add a nullable column,  \n* ship dual‑compatible application code,  \n* backfill data in batches,  \n* finally make the column non‑nullable or drop the old column.  \nThis approach was documented as the safe way to perform zero‑downtime schema changes and required mixed‑version deployment tests, monitoring for insert failures or lock spikes, and a rollback plan that kept the backward‑compatible column [ADR‑007][COM‑007][DOC‑007].\n\n**WHY IT APPLIES OR DIFFERS**  \n*Matches*:  \n- Your situation also involves old and new app versions running concurrently, which is exactly the condition the precedent addresses.  \n- The need for “no insert failures or lock spikes during backfill” aligns with the safety checks the precedent mandates.  \n\n*Differs / Missing*:  \n- The current migration has only passed unit tests; there is no evidence yet that it is backward‑compatible at runtime or that it won’t introduce locking or write‑latency regressions.  \n- No observability or performance measurements (e.g., p95 latency, lock duration) have been collected, which the precedent treats as required before proceeding.\n\n**NEXT STEPS**  \n1. **Create a backward‑compatible migration** (e.g., add new columns as nullable, keep old columns) and update the code to read/write both versions.  \n2. **Run mixed‑version integration tests** in a staging environment that mimics the production rollout: deploy the new code while the old version is still serving traffic, then verify that inserts, reads, and backfills complete without errors or lock spikes.  \n3. **Instrument and monitor** key metrics (write latency, lock wait time, error rate) during a canary or phased rollout (e.g., 5 % of traffic) and be prepared to roll back by disabling the new code path and keeping the backward‑compatible schema if any regression appears.\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**MEDIUM** – The historical pattern directly addresses mixed‑version deployments, but we lack concrete measurements for this specific migration (lock behavior, latency impact, data volume). Obtaining those metrics would raise confidence to HIGH.",
+    "sources": [
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "ADR-012",
+        "title": "ADR: Risky recommendation rollout",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "COM-007",
+        "title": "Commit series: Zero-downtime schema change",
+        "type": "commit"
+      },
+      {
+        "source_id": "DOC-007",
+        "title": "Zero-downtime schema change: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-007",
+        "title": "ADR: Zero-downtime schema change",
+        "type": "architecture_decision"
+      }
+    ]
+  },
+  "V3-01-09::baseline": {
+    "answer": "**Short answer:** No – you should not expand the canary as‑is. The observed increase in the p99 (or p95) latency indicates a regression in the tail‑latency that outweighs the benefit to average latency. The documented rollout practice calls for disabling the canary, investigating the high‑latency traces, and only re‑enabling it under strict guardrails (e.g., a small traffic percentage, stable error‑rate, and stable p95/p99) before any further expansion [ADR‑012][MENTOR‑016][PR‑012].\n\n**Why the tail‑latency matters**\n\n| Metric | Observation | Impact |\n|--------|-------------|--------|\n| Average latency | Improves | Good for overall throughput perception |\n| p99 (or p95) latency | Increases | Degrades user‑experience for the slowest requests, can cause time‑outs, and may violate service‑level objectives (SLOs) |\n\nIn a production system, tail‑latency spikes are often more critical than modest gains in the mean because they affect the worst‑case user experience and can cascade into downstream services.\n\n**Recommended next steps (per the evidence)**\n\n1. **Disable the canary** – turn the feature flag off immediately to stop exposing users to the high‑latency path.  \n2. **Inspect high‑latency traces** – collect and analyze the traces from the canary cohort to identify the root cause (e.g., query plan changes, lock contention, network bursts).  \n3. **Define measurable guardrails** – before any further rollout, agree on concrete thresholds (stable error rate, p95/p99 within the budget) and an observation window.  \n4. **Re‑enable on a tiny fraction** – once the cause is fixed, re‑enable the canary for ≤ 5 % of sessions and verify that both average and tail latencies meet the guardrails.  \n5. **Gradual expansion** – only after the guardrails are satisfied should you consider increasing the traffic share.\n\nThese steps are explicitly called out in the architecture decision record and the mentoring guidance: “Disable the canary, inspect high‑latency traces, and resume gradually only with measurable guardrails” [ADR‑012][MENTOR‑016][PR‑012].\n\n**Bottom line:** Expand the canary **only after** you have resolved the p99 regression and demonstrated that the tail‑latency stays within acceptable limits. Until then, keep the canary disabled.",
+    "sources": [
+      {
+        "source_id": "ADR-012",
+        "title": "ADR: Risky recommendation rollout",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-016",
+        "title": "Mentoring 16: Risky recommendation rollout (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "PR-012",
+        "title": "PR review: Risky recommendation rollout",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "COM-008",
+        "title": "Commit series: Partner traffic spikes",
+        "type": "commit"
+      }
+    ]
+  },
+  "V3-01-09::ask": {
+    "answer": "**RECOMMENDATION**  \nDo **not** expand the canary at this time. Disable the flag, investigate the high‑p99 latency traces, and only after fixing the root cause re‑enable the canary for a small, measured rollout (e.g., 5 % of sessions) with explicit guardrails on error rate and p95 latency before considering a larger expansion.\n\n**HISTORICAL PRECEDENT**  \n- ADR‑012 (“Risky recommendation rollout”) – the team disabled a canary that lowered average latency but raised tail latency, inspected high‑latency traces, and then resumed the rollout only under measurable guardrails. [ADR‑012]  \n- Supporting discussion in MENTOR‑016 and PR‑012 reinforces the same approach: require comparable canary groups, observability of the flag cohort, and guardrails on p95 before expanding. [MENTOR‑016][PR‑012]\n\n**WHY IT APPLIES OR DIFFERS**  \n*Matches*: The current situation mirrors the historical case—average latency improves while the p99 (tail) latency degrades, which violates the production constraint of stable tail performance. The same principle of “controlled rollouts” and “observable guardrails” applies.  \n*Differs*: No evidence suggests a different underlying cause (e.g., a one‑off spike) or that the canary’s code changes are already proven safe for the tail; therefore the precaution remains warranted.\n\n**NEXT STEPS**  \n1. **Turn off the canary flag** immediately (no redeploy needed).  \n2. **Collect and analyze high‑latency traces** for the p99 outliers to identify the root cause (e.g., query path, resource contention).  \n3. **Define guardrails** (stable error rate, p95 ≤ target) and re‑enable the canary for a limited cohort (≈5 % of sessions). Monitor the defined metrics; only expand further if they remain within the guardrails.\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**HIGH** – The recommendation directly follows a documented decision (ADR‑012) that addressed the same trade‑off between average and tail latency, with the same safety criteria. The only missing evidence is the specific root‑cause analysis of the current p99 spikes, which will be gathered in step 2.",
+    "sources": [
+      {
+        "source_id": "ADR-012",
+        "title": "ADR: Risky recommendation rollout",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-016",
+        "title": "Mentoring 16: Risky recommendation rollout (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "PR-012",
+        "title": "PR review: Risky recommendation rollout",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "COM-008",
+        "title": "Commit series: Partner traffic spikes",
+        "type": "commit"
+      }
+    ]
+  },
+  "V3-01-10::baseline": {
+    "answer": "The policy that simply “let the client retry” should be re‑examined.  \nBoth the incident report and the architectural decision record show that allowing blind retries on **POST /payments** caused the service to create two payment intents when the same request was sent a few hundred milliseconds apart. The accepted remedy was to **require a client‑provided idempotency key (and enforce its uniqueness per customer)** so that a safe retry returns the original result instead of creating a duplicate side effect【ADR-002】.  \n\nIn short, the decision to rely on retries alone—without enforcing idempotency—needs to be reconsidered and replaced with a mandatory idempotency‑key strategy.",
+    "sources": [
+      {
+        "source_id": "ADR-002",
+        "title": "ADR: Duplicate payments on retry",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "PR-002",
+        "title": "PR review: Duplicate payments on retry",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-004",
+        "title": "Mentoring 04: Duplicate payments on retry (incident response)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "COM-002",
+        "title": "Commit series: Duplicate payments on retry",
+        "type": "commit"
+      }
+    ]
+  },
+  "V3-01-10::ask": {
+    "answer": "**RECOMMENDATION**  \nRe‑evaluate the current retry policy and add a mandatory client‑provided idempotency key (enforced as a unique constraint per customer) so that safe retries return the original result instead of creating duplicate side‑effects.\n\n**HISTORICAL PRECEDENT**  \nWhen duplicate payments appeared after client retries, the team recorded an ADR that required a client‑provided idempotency key, enforced uniqueness per customer in storage, and returned the original response on retries【ADR-002】. The same solution was implemented in the incident remediation, PR review, and commit series【INC-002】【PR-002】【COM-002】, and it was used as the teaching example in a mentoring session【MENTOR-004】.\n\n**WHY IT APPLIES OR DIFFERS**  \n*Matches*:  \n- The symptom is identical – transient failures cause clients to retry a POST endpoint, leading to duplicate side‑effects.  \n- The root cause is the lack of a persisted idempotency key, exactly as documented in the historical case.  \n\n*Differs*:  \n- If your service already stores some request identifier elsewhere, you must verify that it is truly unique per customer and survives the retry window; otherwise the same risk remains. No evidence suggests a different constraint set, so the prior decision remains relevant.\n\n**NEXT STEPS**  \n1. **Add an idempotency‑key header** (e.g., `Idempotency-Key`) to the API contract and require callers to supply it for all write operations.  \n2. **Implement a uniqueness check** in the database (unique index on `customer_id + idempotency_key`) and, on a repeat request, fetch and return the original response.  \n3. **Write a regression test** that simulates two concurrent identical requests within the retry window and asserts that only one side‑effect is created, then merge the change behind a feature flag for staged rollout.\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**HIGH** – The retrieved evidence directly documents the same problem and the accepted solution (idempotency key enforcement). The only missing evidence would be current metrics on request volume and existing identifier usage, which are not needed to justify the decision but should be collected to size the implementation.",
+    "sources": [
+      {
+        "source_id": "ADR-002",
+        "title": "ADR: Duplicate payments on retry",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "PR-002",
+        "title": "PR review: Duplicate payments on retry",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-004",
+        "title": "Mentoring 04: Duplicate payments on retry (incident response)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "COM-002",
+        "title": "Commit series: Duplicate payments on retry",
+        "type": "commit"
+      }
+    ]
+  },
+  "V3-01-11::baseline": {
+    "answer": "The timeout you are seeing is not currently traceable to the database because the existing instrumentation collapses the database and payment‑gateway latencies into a single request‑duration metric and does not emit correlation IDs. All of the documented analysis (PR‑009, DOC‑009, ADR‑009, INC‑009, COM‑009) points to the root‑cause being insufficient observability rather than a structural problem in the database itself.\n\n**What the evidence says**\n\n* The production incident and the engineering review both note that *“logs lacked correlation IDs, and database and payment gateway timings were aggregated into a single request duration”*【PR-009】,【DOC-009】,【ADR-009】,【INC-009】.  \n* The accepted architectural decision (ADR‑009) and the follow‑up commit series (COM‑009) recommend **propagating correlation IDs and adding separate tracing spans** for validation, database operations, and payment calls, with safe redaction of sensitive data.  \n* The runbook and acceptance criteria require reproducing the timeout and demonstrating root‑cause isolation from a single trace, not rewriting any downstream service.\n\n**Implication for the database**\n\nBecause the database has not been identified as the slow component—its latency is simply hidden by the current tracing setup—rewriting or refactoring the database would be premature and unlikely to resolve the timeout. Instead, the immediate, documented mitigation is to improve observability:\n\n1. **Add correlation IDs** to every request so that logs from the front‑end, service layer, database driver, and payment gateway can be correlated.  \n2. **Instrument distinct spans** for each logical step (input validation, DB query, payment call) so that latency can be measured independently.  \n3. **Redact any sensitive fields** in the trace payloads, as required by the commit policy.  \n4. **Validate the fix with a regression test** that reproduces the timeout and proves the isolated span shows where the delay occurs (as the PR review requested)【PR-009】.\n\nOnly after these changes are in place and the isolated trace shows that the database is indeed the bottleneck should a deeper database investigation—or a rewrite—be considered.\n\n**Bottom line**\n\n> **No, the database should not be rewritten at this stage.** The documented corrective action is to enhance tracing (correlation IDs and per‑dependency spans) to surface the true source of the timeout. Once the improved telemetry is in place, you can determine whether the database, the payment gateway, or another component is responsible and act accordingly.  \n\nIf you need further guidance on implementing the tracing changes, the runbook in DOC‑009 and the ADR‑009 decision provide the detailed steps.",
+    "sources": [
+      {
+        "source_id": "PR-009",
+        "title": "PR review: Unknown checkout timeouts",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "DOC-009",
+        "title": "Unknown checkout timeouts: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-009",
+        "title": "ADR: Unknown checkout timeouts",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-009",
+        "title": "Incident: Unknown checkout timeouts",
+        "type": "incident"
+      },
+      {
+        "source_id": "COM-009",
+        "title": "Commit series: Unknown checkout timeouts",
+        "type": "commit"
+      }
+    ]
+  },
+  "V3-01-11::ask": {
+    "answer": "**RECOMMENDATION**  \nDo **not** rewrite the database at this point. First add proper observability (correlation IDs and fine‑grained spans) to isolate the checkout latency, reproduce the timeout in a controlled environment, and measure the database component separately. Only if the measurements show the database is the root cause should a migration be considered.\n\n**HISTORICAL PRECEDENT**  \n- *Observability before guessing*: For the same “unknown checkout timeouts” problem the team chose to propagate correlation IDs and add tracing spans for validation, database, and payment calls rather than assume a database issue [ADR‑009].  \n- *Measure before migrating*: When database latency was a concern, the team added a composite index and measured query performance before deciding to migrate from SQLite to PostgreSQL [ADR‑001].\n\n**WHY IT APPLIES OR DIFFERS**  \n- **Matches**: Both past decisions dealt with intermittent checkout timeouts and unknown latency sources. The evidence shows that lack of per‑component timing made the root cause unclear, exactly the situation you describe.  \n- **Differs**: The prior database‑migration decision was triggered by concrete query‑latency measurements that exceeded a defined p95 threshold. In the current case you have no such measurements; the timeout could be in the DB, the payment gateway, network, or elsewhere. Therefore the “measure before migrating” principle still applies, but the measurement step must happen first.\n\n**NEXT STEPS**  \n1. **Instrument the checkout path** – propagate a request‑level correlation ID and create separate tracing spans for input validation, DB queries, and external payment calls (as prescribed in ADR‑009).  \n2. **Reproduce the timeout** in a staging environment using the seeded workload described in the runbook (DOC‑009) and capture the per‑span durations.  \n3. **Analyze the data** – if the DB span consistently approaches or exceeds the p95 latency target (e.g., 180 ms per ADR‑001), then evaluate targeted optimizations (indexing) or a migration; otherwise focus on the identified slow component.\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**MEDIUM** – The historical pattern strongly advises improving observability before assuming a database problem, and the “measure before migrating” rule requires concrete latency data that we currently lack. Missing evidence includes actual per‑component latency numbers and any recent changes to the DB schema or workload that could affect performance. Once those measurements are collected, the confidence in the next decision (e.g., migration) can be raised.",
+    "sources": [
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "PR-009",
+        "title": "PR review: Unknown checkout timeouts",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "DOC-009",
+        "title": "Unknown checkout timeouts: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-009",
+        "title": "ADR: Unknown checkout timeouts",
+        "type": "architecture_decision"
+      }
+    ]
+  },
+  "V3-01-12::baseline": {
+    "answer": "No. Using a cache‑only key (e.g., a Redis entry) does **not** give reliable deduplication when several workers can race on the same request.\n\nAll of the post‑mortem and architectural records state that a “cache‑only key is insufficient when separate workers race” and that the safe remedy is to require a client‑provided idempotency key that is persisted and enforced with a transactional uniqueness check in storage (typically a database) — the cache can be used as a fast‑path but must be backed by durable state [ADR-002][INC-002][DOC-002].\n\nTherefore, relying on Redis alone is not sufficient; you need a durable store (or a database‑backed uniqueness constraint) to guarantee that only one payment intent is created even under concurrent retries.",
+    "sources": [
+      {
+        "source_id": "ADR-002",
+        "title": "ADR: Duplicate payments on retry",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "DOC-002",
+        "title": "Duplicate payments on retry: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "COM-002",
+        "title": "Commit series: Duplicate payments on retry",
+        "type": "commit"
+      },
+      {
+        "source_id": "MENTOR-004",
+        "title": "Mentoring 04: Duplicate payments on retry (incident response)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  "V3-01-12::ask": {
+    "answer": "**RECOMMENDATION**  \nImplement a client‑provided idempotency key that is persisted in the primary database with a transactional uniqueness constraint (e.g., `UNIQUE(customer_id, idempotency_key)`). Return the stored result on retries instead of relying on a Redis‑only cache.\n\n**HISTORICAL PRECEDENT**  \nWhen duplicate‑payment bugs surfaced, the team chose to *require a client‑provided idempotency key, enforce uniqueness per customer in storage, and return the original result on safe retries* rather than using a cache‑only key. The decision was recorded in ADR‑002 and reinforced by the incident post‑mortem (INC‑002), technical notes (DOC‑002), and mentoring guidance (MENTOR‑004)【ADR-002】【INC-002】【DOC-002】【MENTOR-004】.\n\n**WHY IT APPLIES OR DIFFERS**  \n- **Matches**: The current proposal also aims to deduplicate payment requests across multiple workers, which is the same failure mode that caused the original incident.  \n- **Differs**: The proposal suggests using Redis alone, a volatile cache, whereas the historical analysis explicitly concluded that *“a cache‑only key is insufficient when separate workers race.”* The root cause (concurrent workers creating duplicate intents) is identical, so the same evidence applies.\n\n**NEXT STEPS**  \n1. **Define the idempotency contract** – require callers to send a unique key per payment attempt (e.g., UUID scoped to the customer).  \n2. **Add a persistent store** – create a table (or use an existing payments table) with a unique constraint on `(customer_id, idempotency_key)`. Wrap the insert in a transaction that either creates the payment intent or fetches the existing one.  \n3. **Add regression coverage** – write a test that fires concurrent duplicate requests and asserts that exactly one payment intent is created and the response is stable (as described in the validation criteria of ADR‑002).  \n\n**CONFIDENCE & MISSING EVIDENCE**  \n**HIGH** – The retrieved sources directly state that a cache‑only solution is insufficient for this problem and prescribe a persistent, transactional idempotency key approach. No additional measurements are required to conclude that Redis alone does not meet the safety requirements.",
+    "sources": [
+      {
+        "source_id": "ADR-002",
+        "title": "ADR: Duplicate payments on retry",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "DOC-002",
+        "title": "Duplicate payments on retry: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "COM-002",
+        "title": "Commit series: Duplicate payments on retry",
+        "type": "commit"
+      },
+      {
+        "source_id": "MENTOR-004",
+        "title": "Mentoring 04: Duplicate payments on retry (incident response)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  "V3-01-13::baseline": {
+    "answer": "The appearance of duplicate events after a crash‑recovery does **not** mean that the transactional‑outbox pattern has failed.  \nAll of the design artefacts that were agreed on for this pattern treat the outbox as an **at‑least‑once** delivery mechanism, which by definition allows the same event to be emitted more than once. The responsibility for dealing with those duplicates is placed on the event consumers, which must be **idempotent** (i.e., they must tolerate and safely ignore repeated deliveries) [COM-005][INC-005][DOC-005].\n\nWhat is required to keep the design sound after you observe duplicates:\n\n| Requirement | Why it matters | Source |\n|-------------|----------------|--------|\n| **Idempotent consumers** – every downstream service that processes outbox events must be able to detect and discard duplicates (or apply them safely). | At‑least‑once delivery guarantees delivery, not uniqueness. | [COM-005][INC-005][DOC-005] |\n| **Persist the outbox table** – never delete or truncate the outbox until you are sure the event has been successfully published. | Guarantees that a crash after the DB commit still leaves the event to be replayed. | [INC-005][DOC-005] |\n| **Pause publishing on failure and replay after recovery** – the publishing worker should stop when it encounters an error, and on restart it should read the persisted rows and re‑publish them. | Provides the “replay” path that recovers lost publishes without losing events. | [INC-005][DOC-005] |\n| **Operational run‑book / recovery procedure** – document the steps to pause the publisher, verify the outbox contents, and trigger a replay. | Makes the recovery process repeatable and auditable. | [INC-005] |\n| **Automated regression test** – inject crashes between the DB commit and the publish step and assert that the system eventually delivers the event (even if duplicated) without side‑effects. | Proves the at‑least‑once guarantee and validates the recovery path before code lands. | [COM-005][PR-005][DOC-005] |\n| **Cleanup, monitoring, and alerting** – because the outbox introduces a small delivery delay, you need background jobs to purge old rows and metrics/alerts to detect stuck rows or publishing back‑pressure. | Prevents unbounded growth of the outbox and surfaces problems early. | [COM-005] |\n\nIn short, duplicate events after recovery are **expected** under an at‑least‑once outbox design. The design is considered successful as long as the above requirements are in place: persisted outbox storage, a pause‑and‑replay recovery flow, idempotent consumers, and automated tests/operational documentation that verify the guarantee. If any of those pieces are missing, the *implementation* of the design has failed, not the design itself.",
+    "sources": [
+      {
+        "source_id": "COM-005",
+        "title": "Commit series: Lost events after transaction",
+        "type": "commit"
+      },
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "PR-005",
+        "title": "PR review: Lost events after transaction",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "INC-005",
+        "title": "Incident: Lost events after transaction",
+        "type": "incident"
+      },
+      {
+        "source_id": "DOC-005",
+        "title": "Lost events after transaction: system notes",
+        "type": "technical_document"
+      }
+    ]
+  },
+  "V3-01-13::ask": {
+    "answer": "**RECOMMENDATION**  \nTreat the duplicate events as expected under an at‑least‑once outbox design; focus on making the downstream consumers idempotent and verify the recovery workflow (pause publishing on failure, replay after restart) with automated tests.\n\n**HISTORICAL PRECEDENT**  \nThe team previously adopted a transactional outbox that guarantees *at‑least‑once* delivery. The design explicitly requires consumers to handle duplicates, and the recovery process keeps the outbox persisted, pauses publishing on failure, and replays after recovery. This was documented and implemented as the fix for “lost events after transaction” [COM-005][INC-005][DOC-005][PR-005].\n\n**WHY IT APPLIES OR DIFFERS**  \n*Matches*:  \n- The current symptom (duplicate events after a crash‑recovery) is the same scenario the outbox design was built for.  \n- The documented recovery steps (persisted outbox, pause‑and‑replay) are still the recommended mitigation.  \n\n*Differs / Needs attention*:  \n- If any consumer downstream does not currently enforce idempotency, duplicate side‑effects will appear, which would be a violation of the design’s assumptions.  \n- The evidence does not show whether monitoring or cleanup of the outbox table is in place for the present deployment.\n\n**NEXT STEPS**  \n1. **Verify consumer idempotency** – audit each event handler to ensure it deduplicates based on a stable event identifier (e.g., UUID or business key).  \n2. **Add a regression test** that injects a crash between DB commit and publish, then asserts that the system recovers without creating unintended duplicate side‑effects (as required in the acceptance criteria) [COM-005][DOC-005].  \n3. **Update operational runbooks** to explicitly describe pausing the publisher on failure and replaying the persisted outbox after recovery, and add alerts for outbox backlog growth.\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**HIGH** – The retrieved sources directly state that duplicate events are an expected outcome of the outbox’s at‑least‑once guarantee and that handling them via idempotent consumers is the intended mitigation.  \n\n*Missing evidence*: quantitative data on current duplicate rates and confirmation that all downstream services already implement idempotency. Gathering those metrics would further reduce risk.",
+    "sources": [
+      {
+        "source_id": "COM-005",
+        "title": "Commit series: Lost events after transaction",
+        "type": "commit"
+      },
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "PR-005",
+        "title": "PR review: Lost events after transaction",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "INC-005",
+        "title": "Incident: Lost events after transaction",
+        "type": "incident"
+      },
+      {
+        "source_id": "DOC-005",
+        "title": "Lost events after transaction: system notes",
+        "type": "technical_document"
+      }
+    ]
+  },
+  "V3-01-14::baseline": {
+    "answer": "The earlier incident (Partner traffic spikes) was solved by **rate‑limiting the offending client** – per‑client token‑bucket limits, Retry‑After headers, and health‑check exemptions [INC-008][ADR-008]. Those controls were appropriate because the bottleneck was an external burst of requests that saturated the API workers.\n\nThe present problem is different. The symptom is a long‑running delay in order‑confirmation e‑mails, and the investigation shows that the **queue depth keeps growing while each worker still processes a message in ~450 ms**; the slowdown is caused by the workers themselves (e.g., retries, bulk‑mail processing) rather than a traffic‑spike [INC-003][MENTOR-005][ADR-003].\n\n**What should change**\n\n| Current root cause | Recommended change (from the email‑queue ADR) |\n|--------------------|----------------------------------------------|\n| Workers are busy handling bulk‑email bursts, causing the queue to back‑up and retries to increase. | **Separate transactional (order‑confirmation) messages from bulk‑email workloads** so that the latency‑sensitive path is not blocked by large‑volume jobs [ADR-003]. |\n| Retries are unbounded, further inflating queue depth. | **Cap retries with exponential back‑off** and move permanently failing messages to a dead‑letter queue for later inspection [ADR-003]. |\n| No explicit isolation of slow‑processing jobs. | **Add dead‑letter handling** and monitor retry fractions; this prevents a single problematic message from tying up a worker indefinitely [ADR-003]. |\n| The temptation to “just add more workers” was rejected as a low‑risk fix. | Keep the worker pool size stable (or increase modestly after load‑testing) but focus on workload segregation and back‑off rather than unlimited scaling [ADR-003]. |\n\n**Summary**\n\n- Keep the **rate‑limiting** controls that were introduced for the partner‑traffic incident, because they address a different class of problem (client‑side request bursts) [INC-008][ADR-008].\n- For the **current delays**, shift the mitigation strategy from rate limiting to **queue‑management improvements**: separate transactional vs. bulk messages, enforce bounded exponential‑backoff retries, and route failed messages to a dead‑letter queue. This directly tackles the slow‑worker symptom and prevents queue buildup without over‑provisioning workers.",
+    "sources": [
+      {
+        "source_id": "INC-003",
+        "title": "Incident: Email queue pressure",
+        "type": "incident"
+      },
+      {
+        "source_id": "MENTOR-005",
+        "title": "Mentoring 05: Email queue pressure (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "ADR-003",
+        "title": "ADR: Email queue pressure",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "ADR-008",
+        "title": "ADR: Partner traffic spikes",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-008",
+        "title": "Incident: Partner traffic spikes",
+        "type": "incident"
+      }
+    ]
+  },
+  "V3-01-14::ask": {
+    "answer": "**RECOMMENDATION**  \nRefactor the notification worker so that transactional messages (e.g., order‑confirmation emails) are processed on a dedicated, high‑priority queue, while bulk or marketing emails are routed to a separate low‑priority queue. Add exponential‑backoff retry caps and dead‑letter handling for the bulk queue, and tune the worker pool size for the transactional queue until processing latency stays well below the SLA (e.g., < 500 ms).\n\n**HISTORICAL PRECEDENT**  \nWhen order‑confirmation emails were delayed during a marketing burst, Alex Morgan recommended separating transactional from bulk workloads, capping retries with exponential back‑off, and adding dead‑letter handling (ADR‑003; also reflected in INC‑003 and MENTOR‑005)【ADR-003】【INC-003】【MENTOR-005】.\n\n**WHY IT APPLIES OR DIFFERS**  \n*Matches*: The current symptom—delays caused by slow workers rather than a traffic spike—mirrors the “email queue pressure” incident where queue depth grew while individual worker latency stayed constant. The same root cause (workload mixing and unbounded retries) is present.  \n*Differs*: The earlier rate‑limiting solution (per‑client token‑bucket limits) addressed a different failure mode (partner traffic saturating API workers) and is not relevant here (ADR‑008)【ADR-008】. Applying global rate limits would not alleviate slow processing of existing work items.\n\n**NEXT STEPS**  \n1. **Instrument** the notification worker to distinguish transactional vs. bulk messages (e.g., by message header or routing key).  \n2. **Create** two separate queues (or topics) and configure the transactional queue with a dedicated worker pool sized to meet latency targets.  \n3. **Implement** exponential‑backoff retry limits and a dead‑letter queue for the bulk queue; add automated regression tests that simulate a burst of bulk email to verify that transactional latency remains within SLA.\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**MEDIUM** – The recommendation aligns with documented precedent for a similar symptom, but we lack current measurements of queue depth, retry rates, and worker pool utilization for the specific service in question. Gathering those metrics would confirm the exact capacity needed and whether additional tuning (e.g., scaling workers) is required.",
+    "sources": [
+      {
+        "source_id": "INC-003",
+        "title": "Incident: Email queue pressure",
+        "type": "incident"
+      },
+      {
+        "source_id": "MENTOR-005",
+        "title": "Mentoring 05: Email queue pressure (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "ADR-003",
+        "title": "ADR: Email queue pressure",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "ADR-008",
+        "title": "ADR: Partner traffic spikes",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-008",
+        "title": "Incident: Partner traffic spikes",
+        "type": "incident"
+      }
+    ]
+  },
+  "V3-01-15::baseline": {
+    "answer": "Alex would put the safety‑first, zero‑downtime migration guidelines ahead of a generic “always roll back” rule.  \nIn the architecture decision (ADR‑007) the team explicitly states that a schema rollback is **not always reversible once data has been transformed** and that the correct recovery path is to “roll back application behavior **while keeping the backward‑compatible column**; never drop populated data blindly.” The recommended “expand‑backfill‑contract” flow (add a nullable column, deploy dual‑compatible code, back‑fill in batches, then enforce the constraint) is therefore the priority [ADR‑007].\n\nBoth the commit note (COM‑007) and Alex’s own mentoring/PR comments reinforce this: the change must be validated with mixed‑version deployment tests, and any rollback must preserve the backward‑compatible column rather than trying to drop it after the irreversible migration has run [COM‑007][MENTOR‑011][PR‑007].\n\nSo, when a previous blanket rollback rule conflicts with a new irreversible schema migration, Alex would prioritize the staged, backward‑compatible migration approach and its safe‑rollback procedure over the older rule.",
+    "sources": [
+      {
+        "source_id": "ADR-007",
+        "title": "ADR: Zero-downtime schema change",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "COM-007",
+        "title": "Commit series: Zero-downtime schema change",
+        "type": "commit"
+      },
+      {
+        "source_id": "PR-007",
+        "title": "PR review: Zero-downtime schema change",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-011",
+        "title": "Mentoring 11: Zero-downtime schema change (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "DOC-007",
+        "title": "Zero-downtime schema change: system notes",
+        "type": "technical_document"
+      }
+    ]
+  },
+  "V3-01-15::ask": {
+    "answer": "**RECOMMENDATION**  \nProceed with the irreversible schema change **only** if you keep the backward‑compatible column and follow the expand‑backfill‑contract pattern (add nullable column, deploy dual‑compatible code, backfill in batches, then enforce the constraint). Treat the previous “always‑rollback” rule as overridden by the production‑safety requirement that data‑loss‑free rollback is impossible once the migration transforms data.\n\n**HISTORICAL PRECEDENT**  \nAlex (and the team) documented a zero‑downtime schema change process that explicitly states:  \n* “Roll back application behavior while keeping the backward‑compatible column; never drop populated data blindly.” [ADR‑007]  \n* The chosen implementation is the *expand‑backfill‑contract* (add nullable column → dual‑compatible code → batch backfill → enforce constraint). [ADR‑007], [COM‑007], [PR‑007], [DOC‑007]  \n\n**WHY IT APPLIES OR DIFFERS**  \n*Matches*: The new migration is **irreversible** once data is transformed, exactly the scenario described in the ADR. The same production constraints (no data loss, need for safe rollback of code only) apply.  \n*Differs*: If the earlier “rollback rule” assumed every change could be undone by dropping the column, that assumption is invalid here; the evidence makes clear that schema rollback is not always reversible. Therefore the rule is superseded by the safety‑first guidance in the ADR.\n\n**NEXT STEPS**  \n1. **Design the migration** using the expand‑backfill‑contract: add the new column as nullable, update the service to read/write both old and new fields, and deploy this version.  \n2. **Run mixed‑version deployment tests** to verify no insert failures or lock spikes during backfill. [ADR‑007]  \n3. **Backfill data in controlled batches**, monitor metrics, and once fully backfilled, enforce the NOT NULL constraint and optionally deprecate the old column (only after confirming no older code paths remain).  \n\n**CONFIDENCE & MISSING EVIDENCE**  \n**HIGH** – The retrieved ADR and supporting artifacts directly address irreversible migrations and prescribe the exact prioritization (production safety over a generic rollback rule). No additional measurements are required beyond the mixed‑version test already mandated.",
+    "sources": [
+      {
+        "source_id": "ADR-007",
+        "title": "ADR: Zero-downtime schema change",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "COM-007",
+        "title": "Commit series: Zero-downtime schema change",
+        "type": "commit"
+      },
+      {
+        "source_id": "PR-007",
+        "title": "PR review: Zero-downtime schema change",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-011",
+        "title": "Mentoring 11: Zero-downtime schema change (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "DOC-007",
+        "title": "Zero-downtime schema change: system notes",
+        "type": "technical_document"
+      }
+    ]
+  },
+  "V3-02-01::baseline": {
+    "answer": "When two independent failure modes surface at the same time – SQLite write‑lock contention on the order database **and** payment‑gateway timeouts – the risk of compounding the problem with automatic retries or aggressive configuration changes is very high.  \n\nThe safest course of action is therefore:\n\n1. **Stop the rollout immediately** – pause or roll back the checkout release so that no new checkout requests are sent to the affected service. This prevents additional write‑lock pressure on SQLite and avoids sending more payment requests that could be timed‑out or retried incorrectly.  \n\n2. **Do not retry non‑idempotent payment calls**.  Blind retries can double‑charge customers or leave orders in an inconsistent state, and the incident record explicitly warns against “retry non‑idempotent payments blindly” [INC-010].  \n\n3. **Add explicit, measured time‑outs and a circuit‑breaker around the payment dependency**.  The incident post‑mortem recommends “introduce explicit timeouts, bounded concurrency and a circuit breaker for the payment dependency” [INC-010].  This isolates the payment path while the database lock is being cleared.  \n\n4. **Limit concurrency on SQLite writes** (bounded concurrency) until the lock contention is understood.  This follows the same “bounded concurrency” principle used for the payment side [INC-010].  \n\n5. **Instrument the checkout flow with correlation IDs and fine‑grained spans** (validation, DB operation, payment call) so that future time‑outs can be isolated to a single component rather than being aggregated into a single request duration [PR-009][INC-009][DOC-009].  \n\n6. **Update the runbook** with the new timeout values, circuit‑breaker thresholds, and the correlation‑ID tracing changes, then encode the regression in an automated test before re‑enabling the release [INC-010][COM-010].\n\nIn short, the safest decision is to **halt the release, roll back the change, and then apply the proven mitigations – explicit time‑outs, bounded concurrency, a circuit breaker for the payment service, and proper tracing – before re‑deploying**. This avoids cascading failures, protects against duplicate payments, and gives you the observability needed to diagnose the SQLite lock and payment‑gateway slowdown separately.   [INC-010][PR-009]",
+    "sources": [
+      {
+        "source_id": "PR-009",
+        "title": "PR review: Unknown checkout timeouts",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "INC-010",
+        "title": "Incident: Payment gateway slowdown",
+        "type": "incident"
+      },
+      {
+        "source_id": "INC-009",
+        "title": "Incident: Unknown checkout timeouts",
+        "type": "incident"
+      },
+      {
+        "source_id": "DOC-009",
+        "title": "Unknown checkout timeouts: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "COM-010",
+        "title": "Commit series: Payment gateway slowdown",
+        "type": "commit"
+      }
+    ]
+  },
+  "V3-02-01::ask": {
+    "answer": "**RECOMMENDATION**  \nImmediately halt the checkout release – disable the feature flag or roll back the deployed code – and restore the previous stable version before any further traffic is sent to the service.\n\n**HISTORICAL PRECEDENT**  \n- *Controlled rollouts*: When a new recommendation service caused high‑latency failures, the team disabled the canary, inspected traces, and only resumed after measurable guardrails were in place【ADR-012】.  \n- *Limit blast radius*: During a payment‑gateway slowdown the team introduced explicit timeouts, bounded concurrency and a circuit‑breaker to protect the rest of the system, and only tuned those knobs after observing the failure【INC-010】.  \n- *Idempotency for duplicate payments*: After duplicate payments appeared on retry, the fix was to require a client‑provided idempotency key and enforce uniqueness per customer【INC-002】.  \n\n**WHY IT APPLIES OR DIFFERS**  \n- The current failure combines **SQLite write‑lock contention** (a storage‑layer symptom) with **payment‑gateway timeouts** (an external‑dependency symptom). Both are safety‑critical and affect user‑facing checkout, matching the “high‑impact, production‑wide” context of the controlled‑rollout and limit‑blast‑radius precedents.  \n- Unlike the earlier incidents, we have **two independent failure modes occurring together**, so the safest first step is to stop the new code entirely rather than tweaking a single component (e.g., only adding a circuit‑breaker). This aligns with the principle of limiting blast radius before applying targeted mitigations.  \n\n**NEXT STEPS**  \n1. **Disable the checkout feature flag / roll back** to the last known‑good commit. Verify that SQLite write locks disappear and payment calls complete within expected latency.  \n2. **Collect detailed observability data**: add correlation IDs and separate spans for DB access and payment calls (as recommended in the PR review)【PR-009】, then reproduce the failure in a staging environment.  \n3. **Iterate on mitigations**:  \n   - Add a circuit‑breaker and bounded concurrency around the payment client (per INC‑010).  \n   - Introduce an idempotency‑key requirement for payment creation (per INC‑002).  \n   - If SQLite contention persists, evaluate a composite index or other query optimisation before considering a DB migration (per ADR‑001).  \n\n**CONFIDENCE & MISSING EVIDENCE**  \n**MEDIUM** – The evidence strongly supports halting the release as the safest immediate action (controlled rollouts, blast‑radius limitation). However, we lack concrete measurements of the current SQLite lock duration, write‑throughput, and payment‑gateway latency, which would be needed to decide the precise tuning of circuit‑breaker thresholds or index changes. Gathering those metrics is the next diagnostic priority.",
+    "sources": [
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "ADR-012",
+        "title": "ADR: Risky recommendation rollout",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "PR-009",
+        "title": "PR review: Unknown checkout timeouts",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "INC-010",
+        "title": "Incident: Payment gateway slowdown",
+        "type": "incident"
+      }
+    ]
+  },
+  "V3-02-02::baseline": {
+    "answer": "The very first action is to **contain the leak** – disable the vulnerable endpoint until the tenant‑scoping logic has been verified. All of the documented procedures for this cross‑tenant order exposure start with an operational‑recovery step that says the endpoint must be turned off (and never reverted to the insecure behavior) before any further rollout or code change is attempted【DOC-004】. Only after the endpoint is disabled can you run the required cross‑tenant request tests (expecting 403/404) and then proceed with the rollout.",
+    "sources": [
+      {
+        "source_id": "DOC-004",
+        "title": "Cross-tenant order exposure: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "COM-004",
+        "title": "Commit series: Cross-tenant order exposure",
+        "type": "commit"
+      },
+      {
+        "source_id": "ADR-004",
+        "title": "ADR: Cross-tenant order exposure",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "PR-004",
+        "title": "PR review: Cross-tenant order exposure",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-008",
+        "title": "Mentoring 08: Cross-tenant order exposure (incident response)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  "V3-02-02::ask": {
+    "answer": "**RECOMMENDATION**  \nImmediately disable (or block) the affected endpoint(s) that are leaking data across tenants, and keep them disabled until tenant‑scoped authorization is verified.\n\n**HISTORICAL PRECEDENT**  \n- The team’s documented response to the same issue was to “disable the vulnerable endpoint until authorization scope is verified; do not revert to the insecure behavior”【DOC-004】.  \n- The same rollback step appears in the commit notes and ADR: “Production safety note: Disable the vulnerable endpoint until authorization scope is verified; do not revert to the insecure behavior”【COM-004】【ADR-004】.  \n- In a mentoring discussion Alex emphasized stopping exposure first: “disable the vulnerable endpoint until authorization scope is verified; do not revert to the insecure behavior”【MENTOR-008】.\n\n**WHY IT APPLIES OR DIFFERS**  \nThe current situation (a newly discovered cross‑tenant leak) matches the historical condition: a route that authenticates but does not enforce tenant scoping, leading to data exposure. The safety constraint—*stop unauthorized access immediately*—is identical, so the same containment action is appropriate. No evidence suggests the endpoint is already protected or that a different mitigation is in place, so the prior “disable‑first” rule remains valid.\n\n**NEXT STEPS**  \n1. **Containment** – Shut down or firewall the vulnerable API path (e.g., return 404/403 for all requests) to prevent further leakage.  \n2. **Verification** – Run the cross‑tenant negative‑authorization test suite to confirm the endpoint now returns 403/404 without revealing data【DOC-004】【COM-004】.  \n3. **Remediation** – Implement tenant‑scoped queries and add the required authorization checks, then re‑enable the endpoint only after the tests pass.\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**HIGH** – The sources explicitly prescribe disabling the endpoint as the first, production‑safety step for this exact class of vulnerability. No additional measurements are required to justify this immediate action.",
+    "sources": [
+      {
+        "source_id": "DOC-004",
+        "title": "Cross-tenant order exposure: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "COM-004",
+        "title": "Commit series: Cross-tenant order exposure",
+        "type": "commit"
+      },
+      {
+        "source_id": "ADR-004",
+        "title": "ADR: Cross-tenant order exposure",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "PR-004",
+        "title": "PR review: Cross-tenant order exposure",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-008",
+        "title": "Mentoring 08: Cross-tenant order exposure (incident response)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  "V3-02-03::baseline": {
+    "answer": "**What to do**\n\n1. **Stop the canary immediately**  \n   *Turn the feature‑flag off* so the new code is no longer serving traffic. This eliminates the latency spike while you investigate and can be done without a new deployment.  \n   *Evidence:* the canary‑rollout guard‑rail in the architecture decision record says to “disable the canary, inspect high‑latency traces, and resume gradually only with measurable guardrails”【ADR-012】.\n\n2. **Collect a clean trace set**  \n   *Re‑enable a very small fraction (e.g., 5 %) of sessions* after the rollback to verify that the monitoring system can still emit correlation IDs.  \n   *Evidence:* the same ADR recommends “re‑enable for 5 % of sessions and require stable error rate and p95 for a predefined observation window”【ADR-012】.\n\n3. **Diagnose why correlation IDs disappeared**  \n   *Check the tracing configuration* for sampling rates that may have been increased by the canary (the new code may have added extra instrumentation).  \n   *Reduce sampling* if the overhead is causing the loss, but keep the essential metrics and redacted error identifiers.  \n   *Evidence:* the commit for unknown checkout timeouts notes that “reduce tracing sampling if overhead rises, retaining essential metrics and redacted error identifiers”【COM-009】.\n\n4. **Reproduce the latency issue in a safe environment**  \n   *Use the runbook* for “Unknown checkout timeouts” to seed a staging environment, reproduce the timeout, and isolate the root cause from a single trace (ensuring no sensitive payloads are logged).  \n   *Evidence:* the system notes describe exactly that process – “reproduce timeouts and demonstrate root‑cause isolation from a single trace”【DOC-009】.\n\n5. **Identify the concrete cause**  \n   Common suspects from the evidence are:\n   - A downstream dependency (e.g., payment gateway) that is now slower or blocked.  \n   - Instrumentation overhead introduced by the canary that inflates request latency and drops correlation IDs.  \n   Verify each by looking at per‑service timings, connection‑pool metrics, and any new tracing spans.\n\n6. **Apply a narrow, validated fix**  \n   Once the root cause is known, implement the smallest possible change (e.g., adjust timeout thresholds, fix tracing headers, or add a missing correlation‑ID propagation step).  \n   *Evidence:* both commit series stress landing “the smallest tested implementation” and backing it with validation【COM-009】【COM-010】.\n\n7. **Validate in staging**  \n   - Run the same reproduction steps.  \n   - Confirm that checkout latency returns to baseline and that correlation IDs appear on every trace.  \n   - Ensure no payment‑detail leakage (redact any sensitive fields).\n\n8. **Gradual re‑rollout with guardrails**  \n   - Flip the feature flag back on for a tiny canary (≤ 5 %).  \n   - Monitor latency (p95) and correlation‑ID completeness.  \n   - Only expand the cohort when both metrics stay within the pre‑defined thresholds.  \n   *Evidence:* the ADR’s rollback‑and‑gradual‑resume pattern【ADR-012】.\n\n9. **Post‑mortem and cleanup**  \n   - Document the sampling change, the root‑cause, and the guardrails used.  \n   - Remove any temporary instrumentation or flags that are no longer needed.  \n\n---\n\n### Summary\n\n- **Rollback the canary** (disable flag) to stop the latency impact.  \n- **Restore correlation‑ID tracing** by lowering sampling or fixing header propagation, as advised in the checkout‑timeout commit.  \n- **Reproduce and isolate** the timeout in a controlled environment using the checkout system notes.  \n- **Deploy a minimal, validated fix**, then **re‑enable the canary gradually** with strict latency and observability guardrails.\n\nFollowing these steps aligns with the documented decisions and runbooks and avoids exposing payment data while restoring both performance and traceability.",
+    "sources": [
+      {
+        "source_id": "COM-009",
+        "title": "Commit series: Unknown checkout timeouts",
+        "type": "commit"
+      },
+      {
+        "source_id": "COM-010",
+        "title": "Commit series: Payment gateway slowdown",
+        "type": "commit"
+      },
+      {
+        "source_id": "ADR-012",
+        "title": "ADR: Risky recommendation rollout",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "DOC-009",
+        "title": "Unknown checkout timeouts: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "DOC-010",
+        "title": "Payment gateway slowdown: system notes",
+        "type": "technical_document"
+      }
+    ]
+  },
+  "V3-02-03::ask": {
+    "answer": "**RECOMMENDATION**  \nImmediately disable the canary (turn the feature flag off) to restore normal checkout latency and bring back correlation‑ID propagation, then investigate the tracing configuration before re‑enabling the canary with strict guardrails.\n\n**HISTORICAL PRECEDENT**  \nThe team previously handled a similar rollout problem by disabling the canary, inspecting high‑latency traces, and resuming the rollout only after measurable guardrails were in place【ADR-012】.  \n\n**WHY IT APPLIES OR DIFFERS**  \n*Matches*:  \n- The current issue is a canary‑driven latency increase, exactly the condition addressed in ADR‑012.  \n- Observability has degraded (missing correlation IDs), which aligns with the “observability before guessing” pattern that stresses reproducing the problem and isolating it via traces【COM-009】【DOC-009】.  \n\n*Differs*:  \n- The loss of correlation IDs adds an extra observability failure not mentioned in ADR‑012, so the investigation must include tracing‑sampling settings and any recent changes to the tracing library.\n\n**NEXT STEPS**  \n1. **Rollback** – Flip the canary flag off (no new deployment required) to return to the stable baseline.  \n2. **Validate observability** – Verify that correlation IDs appear in logs/traces for a few checkout requests; if they are still missing, reduce tracing sampling or adjust the instrumentation per the safety note in COM‑009 (avoid exposing payment data).  \n3. **Root‑cause analysis** – Reproduce the latency in a staging environment, isolate the offending component (e.g., a new dependency or increased tracing overhead), and add a regression test.  \n4. **Controlled re‑enable** – Once latency and tracing are back within acceptable p95 thresholds, re‑enable the canary for a small, comparable cohort (≤5 % of traffic) and monitor latency and correlation‑ID metrics before expanding.\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**MEDIUM** – The evidence directly supports disabling the canary and using observability to guide the fix, but we lack concrete data on *why* correlation IDs disappeared (e.g., recent tracing‑library version change, sampling rate). Gathering that data is the first diagnostic step.",
+    "sources": [
+      {
+        "source_id": "COM-009",
+        "title": "Commit series: Unknown checkout timeouts",
+        "type": "commit"
+      },
+      {
+        "source_id": "COM-010",
+        "title": "Commit series: Payment gateway slowdown",
+        "type": "commit"
+      },
+      {
+        "source_id": "ADR-012",
+        "title": "ADR: Risky recommendation rollout",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "DOC-009",
+        "title": "Unknown checkout timeouts: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "DOC-010",
+        "title": "Payment gateway slowdown: system notes",
+        "type": "technical_document"
+      }
+    ]
+  },
+  "V3-02-04::baseline": {
+    "answer": "**Recovery design for “provider timeout → unknown outcome → client retries the same payment key from two devices”**\n\nBelow is a concrete, low‑risk recovery pattern that builds on the architectural decision that was already taken for the checkout API (see [ADR‑002] and the related incident report [INC‑002]). The design focuses on **idempotent request handling**, **status reconciliation**, and **safe concurrent retries**.\n\n---\n\n## 1. Enforce a client‑provided idempotency key (already accepted)\n\n| Why | How |\n|-----|-----|\n| Guarantees that two identical requests (even from different devices) are treated as a single logical operation. | The client generates a UUID (or other globally‑unique token) **once per payment intent** and sends it in an `Idempotency-Key` header (or body field). |\n| Prevents duplicate payment intents when the network or the payment provider times‑out. | The checkout service stores the key together with the payment record and a **unique constraint** on `(customer_id, idempotency_key)` in the persistence layer. This is exactly the rule recommended in the ADR [ADR‑002] and verified in the incident analysis [INC‑002]. |\n\n*Result*: If two devices retry with the same key, the second request hits the unique‑key check and is routed to the **existing** payment record instead of creating a new intent.\n\n---\n\n## 2. Persist the request lifecycle state\n\n| State | Meaning | Action on a retry |\n|-------|---------|-------------------|\n| **Pending** | Request has been accepted by the checkout service but the downstream payment provider has not yet responded (or the response was lost). | Query the provider (see § 3) or return a “processing” response that the client can poll. |\n| **Succeeded** | Provider confirmed the charge. | Return the original success payload (order ID, receipt, etc.). |\n| **Failed** | Provider returned an error or a definitive decline. | Return the failure payload; the client may start a new payment with a fresh idempotency key. |\n\nStoring the state makes the service **deterministic** for any later retry, regardless of which device issued it.\n\n---\n\n## 3. Resolve the “unknown outcome” after a provider timeout\n\n1. **Synchronous fallback** – Immediately after a timeout, the service **re‑issues the provider call** *once* (protected by a lock on the idempotency key) and updates the stored state.  \n   *Rationale*: The provider is usually still able to process the original request; a quick retry avoids a long‑running poll.\n\n2. **Asynchronous reconciliation** – If the provider does not respond within a short grace period (e.g., 5 s), the service:\n   * Publishes a **reconciliation job** (message queue / background worker).  \n   * The job repeatedly queries the provider’s **transaction‑status endpoint** (or consumes a webhook) until a definitive *succeeded* or *failed* status is returned.  \n   * Once known, the job updates the persisted state and notifies any waiting clients (e.g., via WebSocket, push notification, or a short‑lived polling endpoint).\n\n3. **Client‑side handling** – The client should treat the initial timeout as *“processing”* and continue to poll or listen for the final result rather than blindly retrying. The server’s idempotency handling guarantees that any subsequent POST with the same key will receive the **same final result**.\n\nThis approach follows the guidance from the mentoring discussion that “you should not retry non‑idempotent payments blindly” and that “explicit timeouts and status checks are needed” [MENTOR‑014].\n\n---\n\n## 4. Concurrency safety for two devices retrying simultaneously\n\n* **Database‑level unique constraint** on `(customer_id, idempotency_key)` prevents two rows from being created.  \n* **Optimistic lock / version column** on the payment record ensures that only one worker can transition a *Pending* → *Succeeded/Failed* state at a time.  \n* If two requests arrive within a few milliseconds (as observed in the logs – identical cart IDs within 200 ms [ADR‑002]), the second request will hit the unique‑key violation, fetch the existing record, and return the stored result.\n\n---\n\n## 5. Operational run‑book (quick reference)\n\n1. **Detect duplicate** – Look up the idempotency key.  \n2. **If state is Pending** → trigger reconciliation (sync retry → async job).  \n3. **If state is Succeeded/Failed** → return stored response.  \n4. **If no record** → create a new payment intent, store the key, and invoke the provider.  \n5. **Monitor** – Alert if a Pending state persists longer than the SLA (e.g., >30 s).  \n\nThe run‑book described in the system notes [DOC‑002] already contains the log‑inspection steps and the “replay concurrent duplicate requests” test that validates this flow.\n\n---\n\n## 6. Summary of the recovery flow\n\n```\nClient (Device A or B) ──► POST /payments\n   Idempotency-Key: 123e4567‑e89b‑12d3‑a456‑426614174000\n        │\n        ▼\nCheckout Service\n   1. Look up key\n   2. If record exists → return stored result\n   3. If not → create record (state=Pending) + unique constraint\n   4. Call payment provider\n       ├─ Success → update state=Succeeded, return success\n       ├─ Failure → update state=Failed, return error\n       └─ Timeout → keep state=Pending, trigger sync retry + async reconciliation\n        │\n        ▼\nProvider (may have already processed)\n   ↳ Status endpoint / webhook → updates state when known\n```\n\nBy **requiring an idempotency key**, **persisting request state**, and **reconciling unknown outcomes** through a controlled retry/retry‑later mechanism, the system safely handles the scenario where two devices retry after a provider timeout without creating duplicate charges. This design directly implements the accepted architectural decision [ADR‑002] and the incident‑derived fix [INC‑002], while respecting the mentoring advice to avoid blind retries [MENTOR‑014].",
+    "sources": [
+      {
+        "source_id": "ADR-002",
+        "title": "ADR: Duplicate payments on retry",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "MENTOR-003",
+        "title": "Mentoring 03: Duplicate payments on retry (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "DOC-002",
+        "title": "Duplicate payments on retry: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "MENTOR-014",
+        "title": "Mentoring 14: Payment gateway slowdown (diagnosis)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  "V3-02-04::ask": {
+    "answer": "**RECOMMENDATION**  \nImplement a server‑side idempotency workflow that **stores a reservation record keyed by the client‑provided payment idempotency key before calling the external provider**. On a retry (even from a different device) the service should:\n\n1. Look up the reservation.  \n2. If the payment is already marked **succeeded**, return the original success response.  \n3. If the reservation is **pending** (e.g., the previous call timed‑out), query the provider for the current status or run a reconciliation job, then return the definitive result.  \n4. If no reservation exists, create one atomically, invoke the provider, and update the record with the final outcome.\n\nThis guarantees that at most one external charge is attempted per key and that unknown outcomes are resolved safely.\n\n---\n\n**HISTORICAL PRECEDENT**  \nThe team previously addressed duplicate payments caused by client retries by **requiring a client‑provided idempotency key, enforcing uniqueness per customer in storage, and returning the original result on safe retries**【ADR-002】. The same pattern was documented in the incident post‑mortem and system notes【INC-002】【DOC-002】 and reinforced in mentoring discussions【MENTOR-003】.\n\n---\n\n**WHY IT APPLIES OR DIFFERS**  \n\n*Matches*  \n- The current failure mode (provider timeout → unknown outcome → client retries with the same key) is identical to the scenario that drove the original decision.  \n- The safety constraints for payments (atomic reservation before external call, no independent submissions, need for status checks) are still relevant and were explicitly listed in the engineering guardrails.\n\n*Differs / Additional considerations*  \n- The present case involves **two devices** retrying concurrently, which stresses the need for a **transactionally‑enforced unique constraint** on the idempotency key (not just a cache).  \n- Because the provider may not support its own idempotency, the service must **persist the reservation** and later **reconcile** via a status‑check API or background job—an extra step not detailed in the original ADR but required by the payment‑race‑safety rules.\n\nThus the core principle (client‑provided idempotency key + uniqueness) remains valid, but we extend it with an explicit reservation record and reconciliation path.\n\n---\n\n**NEXT STEPS**  \n\n1. **Schema change** – Add an `idempotency_key` column (unique per customer) and a `payment_reservations` table with fields: `key`, `customer_id`, `status` (PENDING, SUCCESS, FAILED), `provider_reference`, timestamps.  \n2. **Atomic reservation** – In the payment endpoint, start a DB transaction, attempt to insert a reservation with status PENDING; if a duplicate key error occurs, fetch the existing record instead of calling the provider again.  \n3. **Provider call & status handling** – After a successful external charge, update the reservation to SUCCESS; on timeout, leave it PENDING and trigger an immediate status‑check or schedule a reconciliation job.  \n4. **Retry response** – If a reservation is found, return the stored outcome (SUCCESS/FAILED) or, for PENDING, wait for the status check to complete and then respond.  \n5. **Testing** – Write integration tests that fire two concurrent POST /payments with the same key from separate simulated devices, verify only one external charge is made, and that the second request receives the original response.  \n\n---\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**HIGH** – The recommendation directly follows a documented architectural decision (ADR‑002) that addressed the same failure mode, and it aligns with the explicit payment‑race‑safety constraints provided. No additional evidence is required to justify the core approach; the only missing data are implementation‑specific details (e.g., exact DB engine capabilities, provider status‑check API), which can be gathered during the schema‑change design phase.",
+    "sources": [
+      {
+        "source_id": "ADR-002",
+        "title": "ADR: Duplicate payments on retry",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "MENTOR-003",
+        "title": "Mentoring 03: Duplicate payments on retry (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "DOC-002",
+        "title": "Duplicate payments on retry: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "MENTOR-014",
+        "title": "Mentoring 14: Payment gateway slowdown (diagnosis)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  "V3-02-05::baseline": {
+    "answer": "**How to keep events from being lost when the outbox‑publisher goes down, and how to avoid over‑loading the system when it comes back up**\n\n| Problem | Recommended mitigation (with why) |\n|---------|-----------------------------------|\n| **The publisher process is unavailable while the orders DB continues to accept orders** | • **Write every event to a transactional outbox table inside the same DB transaction that creates the order.** Because the DB commit succeeds before the external publish, the event is durably stored even if the publisher crashes. This eliminates the “commit‑then‑crash‑and‑lose‑event” window that caused the original bugs [PR‑005][ADR‑005][INC‑005][DOC‑005]. |\n| **When the publisher restarts it may have to send a large backlog of events** | • **Run the publisher as a separate, idempotent worker that reads the outbox rows in small batches** (e.g., 100–500 rows). <br>• **Apply exponential‑back‑off / retry limits** for each batch so that a sudden surge does not flood downstream services. <br>• **Use a circuit‑breaker or back‑pressure flag**: if the downstream consumer reports “too many requests” or the publish latency exceeds a threshold, pause reading new rows until the consumer catches up. |\n| **Prevent duplicate processing if the publisher retries** | • **Mark rows with a “published‑at” timestamp and a retry‑counter, and only delete them after the external system acknowledges receipt.** <br>• **Make all downstream consumers idempotent** (e.g., deduplicate by event‑ID) so that a re‑sent message does not corrupt state [PR‑005][ADR‑005]. |\n| **Detect and alert on publisher outage before the backlog grows too large** | • **Expose a health‑check metric for the outbox worker (e.g., “rows‑pending‑publish”).** <br>• **Set alerts when the pending count exceeds a safe threshold**, prompting ops to scale the publisher or investigate the failure. |\n| **Scale the publisher to handle spikes without overwhelming downstream services** | • **Run the publisher as a horizontally‑scalable service** (multiple instances reading distinct partitions of the outbox). <br>• **Limit the per‑instance concurrency** (e.g., max 5 parallel HTTP calls) so that the aggregate publish rate stays within downstream capacity. |\n| **Recover gracefully after a long outage** | • **When the worker restarts, it should first read the oldest pending rows and publish them in order**, respecting the batch size and back‑off rules above. <br>• **If a particular row repeatedly fails, move it to a dead‑letter table** for manual inspection, preventing it from blocking the whole backlog. |\n\n### Step‑by‑step operational flow\n\n1. **Order service** creates the order **and inserts an outbox record** in the same DB transaction.  \n2. **Outbox worker** (the publisher) polls the outbox table for rows with `published = false`.  \n3. It **fetches a batch**, attempts to publish each event to the external message bus, **retries on transient failures** with exponential back‑off.  \n4. On successful ack, it **marks the row as published** (or deletes it).  \n5. If the worker detects **high failure rates or downstream throttling**, it **pauses further reads** (circuit‑breaker) until the downstream service recovers, thereby preventing overload.  \n6. **Metrics & alerts** (pending‑row count, publish latency, error rate) give ops early warning of a publisher outage.  \n\n### Why this works\n\n- The **transactional outbox** guarantees that an event is never lost even if the publisher crashes after the DB commit [PR‑005][ADR‑005][INC‑005][DOC‑005].  \n- **Asynchronous, batched publishing** decouples order writes from external delivery, so the orders DB stays healthy while the publisher is down.  \n- **Idempotent consumers** and explicit retry handling ensure that re‑sending the same event does not corrupt downstream state [PR‑005][ADR‑005].  \n- **Back‑pressure and dead‑letter handling** keep the system from being overwhelmed when the backlog is flushed after an outage.\n\nBy combining a durable outbox, a resilient, rate‑limited publisher, and idempotent downstream processing, you eliminate event loss and protect the ecosystem from a sudden surge of pending events when the publisher recovers.",
+    "sources": [
+      {
+        "source_id": "PR-005",
+        "title": "PR review: Lost events after transaction",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-009",
+        "title": "Mentoring 09: Lost events after transaction (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "ADR-005",
+        "title": "ADR: Lost events after transaction",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-005",
+        "title": "Incident: Lost events after transaction",
+        "type": "incident"
+      },
+      {
+        "source_id": "DOC-005",
+        "title": "Lost events after transaction: system notes",
+        "type": "technical_document"
+      }
+    ]
+  },
+  "V3-02-05::ask": {
+    "answer": "**RECOMMENDATION**  \nEnable a durable transactional outbox that stores order events in the same DB transaction as the order write, and run a separate, retry‑capable publisher worker that continuously reads the outbox and pushes events to the downstream system. While the publisher is down, the outbox accumulates events; the worker should apply exponential back‑off and rate‑limit when it resumes to avoid overwhelming the downstream service.\n\n**HISTORICAL PRECEDENT**  \nThe team previously resolved lost‑event bugs by “using a transactional outbox table, publish asynchronously, and make consumers idempotent” [ADR-005]. The same pattern was reviewed in a PR that required regression tests for crash‑between‑commit‑and‑publish scenarios [PR-005] and was discussed in a mentoring session [MENTOR-009]. An incident report confirmed the root cause (crash after DB commit, before external publish) and the chosen fix was the outbox with asynchronous publishing [INC-005]; internal documentation records the design and run‑book [DOC-005].\n\n**WHY IT APPLIES OR DIFFERS**  \n*Matches*:  \n- The current failure mode is identical – the database transaction succeeds but the external publisher is unavailable, risking event loss.  \n- The historical solution explicitly targets this “commit‑then‑publish” gap.  \n\n*Differs / Additional considerations*:  \n- The question adds the risk of **overload** when the publisher comes back up. The original decision focused on durability, not on throttling. Adding back‑pressure and retry limits is a natural extension that does not change the core outbox principle but addresses the new overload concern.\n\n**NEXT STEPS**  \n1. **Verify outbox implementation** – ensure each order write inserts a row into an `order_outbox` table within the same transaction (already the accepted design).  \n2. **Deploy/upgrade the publisher worker** – make it idempotent, add configurable retry back‑off and a max‑in‑flight limit to throttle when the downstream service recovers.  \n3. **Add monitoring & alerts** – track outbox queue depth and publish latency; trigger alerts if the backlog exceeds a safe threshold, allowing ops to intervene before overload.\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**MEDIUM** – The evidence directly supports using a transactional outbox for durability, but it does not contain explicit guidance on overload mitigation (rate‑limiting, back‑off). The recommended throttling measures are inferred from the senior’s emphasis on production safety and observable systems, which is consistent with the overall engineering philosophy. Additional measurements (e.g., downstream service capacity, acceptable backlog size) would solidify the back‑pressure parameters.",
+    "sources": [
+      {
+        "source_id": "PR-005",
+        "title": "PR review: Lost events after transaction",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-009",
+        "title": "Mentoring 09: Lost events after transaction (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "ADR-005",
+        "title": "ADR: Lost events after transaction",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-005",
+        "title": "Incident: Lost events after transaction",
+        "type": "incident"
+      },
+      {
+        "source_id": "DOC-005",
+        "title": "Lost events after transaction: system notes",
+        "type": "technical_document"
+      }
+    ]
+  },
+  "V3-02-06::baseline": {
+    "answer": "**Goal** – Rename the column that backs an API field that old mobile clients still read, without breaking those clients during the rollout.\n\nBelow is a step‑by‑step release plan that combines the “add‑then‑remove” pattern for zero‑downtime schema changes with the API‑deprecation guidance that the team has already documented.\n\n---\n\n## 1. Prepare the database change (zero‑downtime migration)\n\n| Step | Action | Why it matters |\n|------|--------|----------------|\n| **1.1 Add a new nullable column** | `ALTER TABLE … ADD COLUMN new_name <type> NULL;` | The new column can be written to without affecting rows that still use the old column. |\n| **1.2 Deploy a **dual‑compatible** service version** | – The service reads **both** columns (old_name and new_name).<br>– When writing, it writes to **new_name** *and* continues to write to **old_name** for backward compatibility. | Guarantees that any in‑flight or older client that still expects the old field will continue to get a value. |\n| **1.3 Back‑fill** | Run a background job that copies data from `old_name` → `new_name` for existing rows. | Populates the new column for all historic data before the old column becomes obsolete. |\n| **1.4 (Optional) Add a DB trigger or application‑level sync** | Ensure any future writes to the old column are also mirrored to the new column until the old column is dropped. | Prevents data drift while the two columns coexist. |\n| **1.5 Verify** | In staging, run mixed‑version deployment tests that insert rows with the old worker, read them with the new worker, and vice‑versa. The acceptance criteria are “no insert failures or missing fields”. (see DOC‑007) | Confirms the migration is truly zero‑downtime. |\n\n*The above pattern is exactly the “expand‑backfill‑contract” approach described in the mentoring notes*【MENTOR-011】*and the system notes on zero‑downtime schema change*【DOC-007】.\n\n---\n\n## 2. Update the API contract\n\n| Step | Action | Rationale |\n|------|--------|-----------|\n| **2.1 Add the new field** to the response payload **in addition** to the existing field. | The serializer now emits both `oldField` (deprecated) **and** `newField`. |\n| **2.2 Mark the old field as **deprecated** in the API spec** (e.g., OpenAPI `deprecated: true`). | Gives downstream teams a clear signal that the field will disappear. |\n| **2.3 Publish consumer‑contract tests** that assert: <br>• Old clients still receive `oldField` with the correct value.<br>• New clients can read `newField`. | Guarantees backward compatibility for the current client base (DOC‑011, ADR‑011). |\n| **2.4 Deploy the API change behind a **versioned serializer** (e.g., `v1` continues to emit only the old field, `v2` emits both). | Allows an immediate rollback by routing traffic to the older serializer if a problem is discovered (ADR‑011, DOC‑011). |\n\nBoth the architecture decision record and the system notes stress that a field rename is a breaking change even when the type stays the same, and that the safest path is to keep the old field temporarily*【DOC-011】*【ADR-011】*.\n\n---\n\n## 3. Rollout strategy\n\n1. **Feature‑flag the new serializer** – start with it disabled in production.  \n2. **Canary release** – enable the flag for a small percentage of traffic (or a single region). Verify that:  \n   * Old mobile clients receive the deprecated field unchanged.  \n   * New clients (or test harnesses) can read the new field.  \n   * No DB insert errors appear.  \n3. **Gradual expansion** – increase the traffic share while monitoring:  \n   * API latency and error rates.  \n   * DB logs for any `NULL` writes to the new column.  \n   * Client‑side crash reports (especially the old mobile app).  \n4. **Full enable** – once confidence is high, turn the flag on for all traffic.  \n\nIf any issue surfaces, **rollback** by:  \n* Turning the flag off (re‑instating the old serializer).  \n* Keeping the DB columns in place (the old column still holds the correct data).  \n\nThe rollback path is explicitly called out in the ADR and system notes*【ADR-011】*【DOC-011】*.\n\n---\n\n## 4. Deprecation window & final cleanup\n\n| Phase | Duration | Action |\n|-------|----------|--------|\n| **Deprecation announcement** | 2–4 weeks before full enable | Communicate to mobile‑team owners that `oldField` will be removed after a defined window. |\n| **Dual‑field period** | 4–6 weeks (adjust based on client adoption) | Keep both fields in the response; monitor usage of `oldField` via logging/metrics. |\n| **Remove old field** | After usage drops to near‑zero | * Drop the `old_name` column (`ALTER TABLE … DROP COLUMN old_name`).<br>* Remove the deprecated field from the API spec and serializer.<br>* Delete the back‑fill job and any sync triggers. |\n\nThe temporary maintenance cost of overlapping fields is acknowledged as a trade‑off, but it is the recommended low‑risk path*【DOC-011】*【ADR-011】*.\n\n---\n\n## 5. Validation & Acceptance Criteria\n\n* **Functional** – Both old and new payload shapes are accepted by contract tests.  \n* **Data integrity** – All rows have a non‑NULL value in `new_name` after back‑fill.  \n* **Zero‑downtime** – No insert or update failures observed during mixed‑version deployments (as verified in staging).  \n* **Observability** – Metrics for `oldField` usage drop to < 1 % before removal.  \n\nThese criteria mirror the acceptance checks described in the system notes*【DOC-011】* and the ADR*【ADR-011】*.\n\n---\n\n### Summary\n\n1. **Add a nullable column** and deploy dual‑compatible code (read/write both columns).  \n2. **Back‑fill** existing rows, then **add the new API field** while keeping the old one deprecated.  \n3. **Canary → full rollout** behind a feature flag, with versioned serializers for instant rollback.  \n4. **Run contract tests** for both payload versions throughout.  \n5. **After a deprecation window**, drop the old column and field.\n\nFollowing this plan gives you a *zero‑downtime* migration that protects the existing mobile clients while allowing the new column and API field to be introduced safely.",
+    "sources": [
+      {
+        "source_id": "DOC-011",
+        "title": "Breaking API response: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-011",
+        "title": "ADR: Breaking API response",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-011",
+        "title": "Mentoring 11: Zero-downtime schema change (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "MENTOR-015",
+        "title": "Mentoring 15: Breaking API response (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "DOC-007",
+        "title": "Zero-downtime schema change: system notes",
+        "type": "technical_document"
+      }
+    ]
+  },
+  "V3-02-06::ask": {
+    "answer": "**RECOMMENDATION**  \nDeploy the rename as a *backward‑compatible, phased* change:  \n\n1. Add the new column (nullable) alongside the existing one.  \n2. Update the API serializer to return **both** the old field name (for existing mobile clients) and the new field name (for new clients).  \n3. Guard the new field behind a feature flag that can be toggled without redeploy.  \n4. Run a back‑fill job to copy data from the old column to the new column.  \n5. After a deprecation window with contract‑test coverage, retire the old column and the flag.\n\n---\n\n**HISTORICAL PRECEDENT**  \n- *ADR‑011* – When a field rename was required, the team “restored the old field, introduced the new field additively, and defined a deprecation window with consumer contract tests” [ADR-011].  \n- *DOC‑011* reinforces that “a field rename is a breaking change even if types otherwise stay identical” and recommends versioned serializers for fallback [DOC-011].  \n- *MENTOR‑011* describes a zero‑downtime schema change: add a nullable column, deploy dual‑compatible code, back‑fill, then drop the old column [MENTOR-011].\n\n---\n\n**WHY IT APPLIES OR DIFFERS**  \n*Matches*: The situation is a pure API‑field rename that would break existing mobile clients if the old field disappears. The historical decision handled exactly this by keeping both fields temporarily and using a deprecation window.  \n*Differs*: The current team also wants a **feature‑flag‑controlled rollout** to limit exposure while monitoring the new field’s correctness. This adds a small amount of cleanup work (as noted in ADR‑012) but provides an extra safety lever [ADR-012].\n\n---\n\n**NEXT STEPS**  \n\n1. **Schema change** – Add the new column (`new_name`) as nullable; keep the existing column (`old_name`). Deploy this migration alone (no code change).  \n2. **Dual‑compatible API** – Extend the serializer to emit `old_name` (unchanged) and `new_name` (populated from the new column). Wrap the `new_name` output in a feature flag (`enable_new_name`).  \n3. **Back‑fill** – Run a background job to copy values from `old_name` to `new_name` for all rows; verify with a checksum.  \n4. **Contract tests** – Add consumer‑contract tests that assert both fields are present and that clients using only `old_name` still pass.  \n5. **Canary rollout** – Enable the flag for a small percentage of traffic (e.g., 5 %) and monitor error rates and latency. If stable, increase gradually.  \n6. **Deprecation window** – After a predefined period (e.g., 2 weeks) with no client complaints, remove `old_name` from the response, drop the column, and turn off the flag.\n\n---\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**HIGH** – The recommendation directly follows documented precedents for field renames (ADR‑011, DOC‑011) and zero‑downtime migrations (MENTOR‑011).  \n\n*Missing evidence*:  \n- Exact distribution of mobile client versions to size the deprecation window.  \n- Performance impact of emitting two fields (payload size, latency).  \n- Observability metrics needed to validate the flag‑controlled canary (error rate thresholds).  \n\nGathering these measurements would allow fine‑tuning the rollout but does not change the core safe‑release plan.",
+    "sources": [
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "ADR-012",
+        "title": "ADR: Risky recommendation rollout",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "DOC-011",
+        "title": "Breaking API response: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-011",
+        "title": "ADR: Breaking API response",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-011",
+        "title": "Mentoring 11: Zero-downtime schema change (diagnosis)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  "V3-02-07::baseline": {
+    "answer": "The symptom you’re seeing is exactly the one described in the “partner traffic spikes” decision records: a single, high‑volume tenant consumes most of the worker pool, causing the latency‑budget violations for the rest of the tenants, and the retry logic that those tenants use ends up adding even more work to an already‑over‑loaded system.\n\n**What has to change**\n\n| Change | Why it helps | How it is described in the evidence |\n|--------|--------------|--------------------------------------|\n| **Introduce per‑client token‑bucket quotas** – each tenant gets its own request‑rate limit. | Prevents a “large tenant” from monopolizing workers; the bucket will throttle the tenant once it exceeds its fair share, keeping other tenants under the p95 latency budget. | “Apply per‑client token‑bucket limits …” [ADR‑008] |\n| **Publish Retry‑After (or similar back‑off) semantics** to callers. | Gives clients a clear signal to back‑off instead of hammering the service with aggressive retries, which otherwise “amplify overload.” | “publish Retry‑After semantics” [ADR‑008]; “Poorly configured retry behavior can amplify overload.” [COM‑008] |\n| **Exempt health‑check traffic from the per‑client limits** (or give it a separate high‑priority bucket). | Guarantees that the system can still be probed and recovered even when the quota limits are being hit. | “exempt health checks appropriately” [ADR‑008] |\n| **Keep a protective global circuit‑breaker / request limit** that can be adjusted quickly in production. | Acts as a safety net if the per‑client limits are mis‑configured or a sudden burst exceeds the sum of all quotas. | “Adjust quota configuration quickly while keeping a protective global circuit limit.” [COM‑008] |\n| **Validate the change with mixed‑tenant load‑tests** that verify no tenant can push the others above the agreed p95 latency budget. | Provides the required evidence that the fix works before it is shipped. | “Load‑test mixed tenants and confirm abusive clients cannot push other tenants above the agreed p95 budget.” [COM‑008]; also repeated in DOC‑008, ADR‑008, PR‑008. |\n| **Treat legitimate burst traffic fairly** – quotas should allow short‑lived spikes but still enforce the long‑term rate. | Avoids penalising legitimate traffic while still protecting the system. | “Per‑client limits need fair quotas and careful treatment of legitimate bursts.” [COM‑008] |\n\n**In short:**  \nReplace the current “first‑come‑first‑served” worker allocation with **per‑tenant token‑bucket throttling**, expose **Retry‑After** (or similar) to callers so they back‑off responsibly, keep a **global circuit‑breaker** as an emergency knob, and **exempt health‑check traffic** from throttling. Verify the behavior with the prescribed mixed‑tenant load‑test to ensure the p95 latency budget is respected for all tenants.  \n\nThese changes directly address the monopolisation by the large tenant, the latency misses of smaller tenants, and the load amplification caused by aggressive retries.  \n\n*Sources: COM‑008, DOC‑008, ADR‑008, MENTOR‑012, PR‑008.*",
+    "sources": [
+      {
+        "source_id": "COM-008",
+        "title": "Commit series: Partner traffic spikes",
+        "type": "commit"
+      },
+      {
+        "source_id": "DOC-008",
+        "title": "Partner traffic spikes: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-008",
+        "title": "ADR: Partner traffic spikes",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-012",
+        "title": "Mentoring 12: Partner traffic spikes (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "PR-008",
+        "title": "PR review: Partner traffic spikes",
+        "type": "pull_request"
+      }
+    ]
+  },
+  "V3-02-07::ask": {
+    "answer": "**RECOMMENDATION**  \nIntroduce per‑client token‑bucket quotas on the request‑handling layer, publish `Retry‑After` headers for throttled calls, and exempt health‑check endpoints from the limits. This will prevent a single large tenant from exhausting worker threads and will stop aggressive client retries from amplifying overload.\n\n**HISTORICAL PRECEDENT**  \nThe team previously addressed “partner traffic spikes” by applying per‑client token‑bucket limits, adding `Retry‑After` semantics, and exempting health checks — a narrowly scoped change that could be reviewed and rolled back quickly [ADR-008][COM-008][DOC-008][PR-008][MENTOR-012].\n\n**WHY IT APPLIES OR DIFFERS**  \n*Matches*:  \n- The current symptom (one tenant monopolizing workers) is the same class of abusive‑client overload the prior decision targeted.  \n- Retries that “amplify load” were explicitly cited as a risk in the historical reasoning.  \n\n*Differs / Unknown*:  \n- The exact quota values and burst‑handling policies used previously are not documented here; they must be tuned to the present tenant mix.  \n- We do not have current measurements of worker‑pool saturation or the existing global circuit‑breaker settings, so the precise scale of the limits is uncertain.\n\n**NEXT STEPS**  \n1. **Instrument** the gateway to record per‑tenant request rates and worker‑pool usage (e.g., Prometheus counters).  \n2. **Define** fair token‑bucket parameters (rate, burst) based on the observed p95 latency budget and the desired isolation level.  \n3. **Deploy** the quota middleware with `Retry‑After` responses and health‑check exemptions in a canary, then run a mixed‑tenant load test to verify that no tenant can push others above the agreed p95 budget.  \n\n**CONFIDENCE & MISSING EVIDENCE**  \n**MEDIUM** – The problem pattern aligns with the documented “partner traffic spikes” case, but we lack concrete current metrics (worker saturation levels, existing global limits) needed to size the quotas precisely. Gathering those measurements is the missing evidence required to finalize the configuration.",
+    "sources": [
+      {
+        "source_id": "COM-008",
+        "title": "Commit series: Partner traffic spikes",
+        "type": "commit"
+      },
+      {
+        "source_id": "DOC-008",
+        "title": "Partner traffic spikes: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-008",
+        "title": "ADR: Partner traffic spikes",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-012",
+        "title": "Mentoring 12: Partner traffic spikes (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "PR-008",
+        "title": "PR review: Partner traffic spikes",
+        "type": "pull_request"
+      }
+    ]
+  },
+  "V3-02-08::baseline": {
+    "answer": "**Emergency‑deployment priority list (today)**  \n\n| # | Action (what to do) | Why it matters (evidence) | How to verify / roll‑out |\n|---|----------------------|---------------------------|--------------------------|\n| 1 | **Confirm the symptom and its scope** – check checkout‑latency dashboards and the checkout‑timeout incident logs to see how many sessions are blocked. | The recommendation rollout is already known to increase checkout latency on ~20 % of sessions and to cause intermittent checkout time‑outs [DOC‑012][ADR‑012]. The incident record shows that missing correlation IDs made root‑cause tracing hard [INC‑009]. | Pull the p95 latency chart for the canary flag, and query the checkout‑timeout alert for recent hit counts. |\n| 2 | **Immediately disable the risky recommendation canary** (turn the feature flag off for all traffic). | All three engineering artifacts (run‑book, PR review, ADR) prescribe “disable the canary” as the first containment step [DOC‑012][PR‑012][ADR‑012]. | Use the feature‑flag service UI or API to set the flag to *off*; confirm the flag state in the control plane. |\n| 3 | **Validate that checkout latency returns to baseline** – re‑measure p95 latency and error rate after the flag is off. | The acceptance criterion for the rollout is “stable error rate” after re‑enabling [DOC‑012][ADR‑012]; we need to be sure the block is gone before proceeding. | Watch the same dashboards for at least 5 min (or the typical latency window) and confirm p95 is back to pre‑deployment levels. |\n| 4 | **Gather high‑latency traces and logs while the canary is disabled** – enable extra tracing (correlation IDs, spans for DB/payment) to capture any residual latency that may still be present. | The checkout‑timeout incident highlighted that lack of correlation IDs hid the slow dependency [INC‑009]; adding them will give a durable view for the emergency fix. | Deploy the temporary tracing instrumentation (e.g., OpenTelemetry config) and verify that new spans appear in the tracing UI. |\n| 5 | **Prepare the emergency deployment** – create a minimal, tested change that either (a) rolls back the new recommendation algorithm or (b) adds a guard‑rail (e.g., a hard timeout or circuit‑breaker) to protect checkout. | The PR review stresses “add a failing regression test, cover failure and retry paths, and make operational recovery explicit” [PR‑012]; a small, well‑tested change reduces risk in an emergency. | • Clone the current repo.<br>• Add a unit test that reproduces the latency spike.<br>• Implement the rollback or guard‑rail.<br>• Run the test suite locally and in the seeded staging environment described in the run‑book. |\n| 6 | **Deploy the emergency change to production** – use the standard CI/CD pipeline with the “emergency‑deployment” flag (e.g., bypassing non‑essential gates but keeping the audit trail). | The architecture decision record (ADR) allows “resume gradually only with measurable guardrails” after a fix [ADR‑012]; an emergency push should still respect the guard‑rail principle. | Trigger the pipeline, monitor the deployment logs, and keep the canary flag off. |\n| 7 | **Post‑deployment verification** – re‑run the checkout latency dashboards, confirm error‑rate < 1 % and p95 within SLA, and ensure no new alerts fire. | The ADR’s validation step is “re‑enable for 5 % of sessions and require stable error rate” [ADR‑012]; before any traffic is re‑exposed we must verify stability. | Observe metrics for at least 10 min; if stable, proceed to step 8. |\n| 8 | **Gradual re‑enable of the recommendation algorithm** – lift the canary to 5 % of sessions, monitor the same metrics, and only increase further if the error rate remains stable. | This is the explicit acceptance criterion for the rollout [DOC‑012][ADR‑012]. | Adjust the feature‑flag percentage to 5 %; repeat monitoring loop. |\n| 9 | **Document the incident and the emergency fix** – add a short post‑mortem entry linking the canary disable, the tracing addition, and the emergency patch. | Good practice (and the run‑book) calls for a durable fix and documentation to prevent recurrence [INC‑009][MENTOR‑006]. | Write a brief incident note in the incident‑tracking system, reference the source IDs, and tag the responsible on‑call engineer. |\n\n**Key take‑aways for today**\n\n1. **Contain first** – turn off the recommendation canary (step 2).  \n2. **Verify containment** before any code change (step 3).  \n3. **Add missing observability** (correlation IDs, spans) to avoid blind spots (step 4).  \n4. **Deploy the smallest possible corrective change** that either rolls back the algorithm or adds a protective guard‑rail (steps 5‑6).  \n5. **Only after stable metrics** should you start a controlled re‑enable (steps 7‑8).  \n\nFollowing this ordered checklist satisfies the documented run‑book, PR review expectations, and the architecture decision while keeping checkout functional for customers.",
+    "sources": [
+      {
+        "source_id": "DOC-012",
+        "title": "Risky recommendation rollout: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "PR-012",
+        "title": "PR review: Risky recommendation rollout",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "ADR-012",
+        "title": "ADR: Risky recommendation rollout",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-009",
+        "title": "Incident: Unknown checkout timeouts",
+        "type": "incident"
+      },
+      {
+        "source_id": "MENTOR-006",
+        "title": "Mentoring 06: Email queue pressure (incident response)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  "V3-02-08::ask": {
+    "answer": "**RECOMMENDATION**  \nImmediately disable the recommendation‑service canary (i.e., roll back the newly‑launched algorithm) and deploy a hot‑fix that restores the previous stable recommendation path. This will unblock checkout while you prepare a measured, guarded rollout.\n\n**HISTORICAL PRECEDENT**  \nWhen a new recommendation algorithm caused checkout latency on ≈20 % of sessions, the team *disabled the canary, inspected high‑latency traces, and resumed gradually with measurable guardrails*【ADR-012】. The same approach was documented in the service notes and reinforced in the PR review, which required a failing regression test and explicit recovery steps【DOC-012】【PR-012】.\n\n**WHY IT APPLIES OR DIFFERS**  \n*Matches*:  \n- The current symptom is the same – the recommendation service is blocking checkout.  \n- Evidence from the earlier incident showed the problem was isolated to the canary flag cohort.  \n\n*Differs*:  \n- The urgency is higher (an emergency deployment is required today), so the rollback must be performed as a hot‑fix rather than a gradual “disable‑then‑re‑enable 5 %” cycle. The underlying principle (protect the critical checkout path first, then iterate) remains unchanged.\n\n**NEXT STEPS**  \n1. **Containment** – Turn off the feature flag for the new recommendation algorithm (or redeploy the previous version) to restore checkout latency to baseline.  \n2. **Verification** – Run the regression test added in the PR review to confirm the checkout path is healthy and that the old algorithm behaves correctly.  \n3. **Observability** – Capture high‑latency traces and correlation IDs as done in the checkout‑timeout incident to ensure future failures are quickly diagnosable【INC-009】. Then plan a controlled, measured rollout (e.g., 5 % traffic) with guardrails before full enable.\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**HIGH** – The current problem aligns directly with the documented risky rollout scenario, and the historical decision explicitly prescribes disabling the canary as the first step. No additional evidence is required to justify this immediate action.",
+    "sources": [
+      {
+        "source_id": "DOC-012",
+        "title": "Risky recommendation rollout: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "PR-012",
+        "title": "PR review: Risky recommendation rollout",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "ADR-012",
+        "title": "ADR: Risky recommendation rollout",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-009",
+        "title": "Incident: Unknown checkout timeouts",
+        "type": "incident"
+      },
+      {
+        "source_id": "MENTOR-006",
+        "title": "Mentoring 06: Email queue pressure (incident response)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  "V3-02-09::baseline": {
+    "answer": "No. In the payment‑gateway work that the team has documented, a change that improves a metric (e.g., throughput) is **not** allowed to ship if it introduces more payment failures or lacks a verified rollback path.\n\n* The pull‑request review (PR‑010) makes the approval conditional on “tests and measurement support this change” and explicitly warns against “retrying non‑idempotent payments blindly.” The reviewers require that failure behavior be safe and observable before the change can be merged.  \n* The accompanying commit (COM‑010) and system notes (DOC‑010) stress that the smallest, **tested** implementation must be landed, and that “it must be backed by validation.” They also describe operational recovery steps (tuning breaker thresholds, preserving hard timeouts) that are only safe when the change has been exercised in a test environment.  \n* The incident record (INC‑010) shows that after a payment‑gateway slowdown the team introduced explicit timeouts, bounded concurrency, and a circuit breaker **only after** they had observable evidence and an automated regression test to guard against regressions.\n\nTogether these sources establish a clear policy:\n\n1. **Safety first** – any change that can cause payment failures must be validated with fault‑injection tests and measurable thresholds.  \n2. **Rollbackability** – the change should be “narrowly scoped” and reversible; a tested rollback is part of the safety net.  \n3. **No blind retries** – non‑idempotent payments must not be retried automatically, because that can amplify failures.\n\nA release that *improves throughput* **but** *increases payment failures* and *has no tested rollback* violates all three of those criteria. Therefore, according to the documented process, it would **not be acceptable** to ship such a release without additional testing, measurement, and a verified rollback mechanism.  \n\n**Recommended next steps**  \n- Add fault‑injection tests that deliberately slow or fail the payment gateway and verify that the system degrades gracefully (as described in PR‑010, COM‑010, DOC‑010).  \n- Measure the impact on both throughput and failure rates; adjust timeouts, concurrency limits, or circuit‑breaker thresholds until failures are within acceptable limits.  \n- Implement and validate a rollback procedure (e.g., feature flag or reversible deployment) before merging.  \n\nOnly after these safeguards are in place should the change be considered for approval.  \n\n**Citations:** PR‑010, COM‑010, DOC‑010, INC‑010.",
+    "sources": [
+      {
+        "source_id": "PR-010",
+        "title": "PR review: Payment gateway slowdown",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "COM-010",
+        "title": "Commit series: Payment gateway slowdown",
+        "type": "commit"
+      },
+      {
+        "source_id": "DOC-010",
+        "title": "Payment gateway slowdown: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "INC-010",
+        "title": "Incident: Payment gateway slowdown",
+        "type": "incident"
+      },
+      {
+        "source_id": "PR-009",
+        "title": "PR review: Unknown checkout timeouts",
+        "type": "pull_request"
+      }
+    ]
+  },
+  "V3-02-09::ask": {
+    "answer": "**RECOMMENDATION**  \nPause the release and roll back (or disable via a feature flag) until a tested rollback path exists and the payment‑failure rate is brought back within acceptable limits.\n\n**HISTORICAL PRECEDENT**  \n- When duplicate payments occurred because retries were not idempotent, Alex introduced a client‑provided idempotency key and required uniqueness to make retries safe【INC-002】.  \n- For a risky recommendation‑service rollout, the team used a canary flag, required stable error‑rate guardrails, and defined an immediate “turn‑off‑the‑flag” rollback without redeployment【ADR-012】.  \n- In the payment‑gateway slowdown work, the change was kept narrowly scoped, validated with fault‑injection, and the rollback path (disabling the circuit‑breaker rule) was explicitly documented【PR-010】【COM-010】【DOC-010】.\n\n**WHY IT APPLIES OR DIFFERS**  \n- **Matches:** Both the incident and the controlled‑rollout examples show that any change that harms payment correctness must be stopped quickly and made reversible. The senior’s principle of “Production safety” and “Correctness over performance” directly conflicts with shipping a release that raises payment failures.  \n- **Differs:** The current release improves throughput rather than fixing a bug, and it lacks a tested rollback. The historical cases had explicit rollback mechanisms (idempotency key, feature‑flag disable, circuit‑breaker toggle). Those mechanisms are missing here, so the safety net is weaker.\n\n**NEXT STEPS**  \n1. **Implement a fast‑revert path** – add a feature flag or a hot‑swap configuration that can disable the new throughput‑optimizing code without a full redeploy.  \n2. **Validate rollback** – run the rollback in a staging environment, exercising the same traffic patterns that caused the payment failures, and confirm that payment success rates return to baseline.  \n3. **Add safety checks** – introduce idempotency keys or other safe‑retry mechanisms for payment requests, and add automated tests that inject gateway latency to verify that failures are handled without duplicate or lost payments【PR-010】【COM-010】.\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**MEDIUM** – The evidence strongly supports the principle of not shipping changes that increase payment failures and the need for a tested rollback, but we lack concrete metrics on the failure‑rate increase and whether a feature‑flag mechanism is already in place. Those measurements would raise confidence to HIGH.",
+    "sources": [
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "ADR-012",
+        "title": "ADR: Risky recommendation rollout",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "PR-010",
+        "title": "PR review: Payment gateway slowdown",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "COM-010",
+        "title": "Commit series: Payment gateway slowdown",
+        "type": "commit"
+      },
+      {
+        "source_id": "DOC-010",
+        "title": "Payment gateway slowdown: system notes",
+        "type": "technical_document"
+      }
+    ]
+  },
+  "V3-02-10::baseline": {
+    "answer": "When two geographically‑separate regions can issue the same payment request at the same time and the local databases cannot talk to each other, the system must be protected against **duplicate‑payment creation** by making the request itself *idempotent* and by detecting any replay at the point of persistence.\n\n**Key safeguards that have been proven to work in this situation**\n\n| Safeguard | Why it is needed | How it is implemented |\n|-----------|------------------|-----------------------|\n| **Client‑provided idempotency key** (or request‑key) | Gives the request a globally unique identifier that survives retries and can be used to recognise a duplicate even when the two regions are racing. | The client generates a UUID (or other high‑entropy token) and sends it with the payment request. The key is stored together with the payment intent. |\n| **Enforce uniqueness per customer in durable storage** | Guarantees that only one payment intent can be created for a given key/customer pair, regardless of which region wins the race. | A transactional uniqueness constraint (e.g., a unique index on `(customer_id, idempotency_key)`) is added to the payments table. The insert is attempted inside a single DB transaction; if the constraint is violated the service returns the previously stored result. |\n| **Duplicate‑payment detection logic** | Even if the DB cannot coordinate in real‑time, the service can still look up the key and return the original outcome instead of creating a second charge. | On receipt of a request the service first queries the storage for the key. If a record exists, it returns the stored response (status, transaction ID, etc.). |\n| **Retention & collision handling for keys** | Idempotency keys must be kept long enough to cover the retry window and must be checked for accidental reuse. | Keys are retained for a configurable period (e.g., 24 h) and a background job purges expired entries. If a new request reuses an existing key for a different payload, the service rejects it with a clear “duplicate‑key‑collision” error. |\n| **Feature‑flag control of the enforcement** | Allows operators to disable the new request‑key enforcement quickly if it causes unexpected failures, while still keeping duplicate‑payment detection active. | The enforcement path is wrapped in a flag that can be toggled at runtime; the detection path remains always on. |\n| **Automated test & run‑book** | Guarantees that the safeguard works before it ships and gives operators a clear recovery procedure. | An integration test replays concurrent duplicate requests and asserts that exactly one payment intent is created and the response is stable. The run‑book documents how to verify the fix and how to roll back via the feature flag. |\n| **Cache‑only key is insufficient** | A pure in‑memory cache cannot survive a race between workers in different regions; the uniqueness rule must be backed by persistent storage. | The design therefore relies on the DB‑level unique constraint rather than a local cache. |\n\n**What this looks like in practice**\n\n1. **Request flow** – The client sends `payment_idempotency_key` with the payment payload.  \n2. **Lookup** – The service checks the payments table for that key (and the customer).  \n3. **If found** – Return the stored result (status, gateway transaction ID).  \n4. **If not found** – Attempt to insert a new payment row with the key under a transaction that includes a unique index on `(customer_id, idempotency_key)`.  \n5. **On unique‑constraint violation** – Treat as a duplicate and return the existing result.  \n6. **After success** – Persist the gateway response together with the key so future retries are answered from storage.  \n\nThese safeguards directly address the problem of concurrent processing across uncoordinated databases and have been documented as the chosen fix for duplicate‑payment incidents in the organization [DOC-002][INC-002].",
+    "sources": [
+      {
+        "source_id": "DOC-002",
+        "title": "Duplicate payments on retry: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "MENTOR-013",
+        "title": "Mentoring 13: Unknown checkout timeouts (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "MENTOR-014",
+        "title": "Mentoring 14: Payment gateway slowdown (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "COM-010",
+        "title": "Commit series: Payment gateway slowdown",
+        "type": "commit"
+      }
+    ]
+  },
+  "V3-02-10::ask": {
+    "answer": "**RECOMMENDATION**  \nRequire a client‑provided idempotency key for every payment request and enforce its uniqueness per customer in each region’s database (using a transactional uniqueness constraint). On a duplicate key hit, return the original payment result instead of re‑executing the charge. Add an automated regression test that replays concurrent duplicate requests and verifies that exactly one payment intent is created.\n\n**HISTORICAL PRECEDENT**  \nWhen duplicate payments were observed on retry, Alex’s team introduced a client‑provided idempotency key, stored it with a per‑customer uniqueness rule, and returned the original result on safe retries. The fix was chosen after confirming that a cache‑only key was insufficient for racing workers, and the trade‑off of retaining keys and handling collisions was accepted. [DOC-002] [INC-002]\n\n**WHY IT APPLIES OR DIFFERS**  \n*Matches*:  \n- The current problem is also a race between independent workers (different regions) that cannot coordinate via a shared database, exactly the situation described in the duplicate‑payment incidents.  \n- The same risk—creating more than one charge for the same logical payment—exists, so the idempotency‑key safeguard directly addresses it.\n\n*Differs*:  \n- The historical fix relied on a single database enforcing uniqueness; with two isolated regional databases you must apply the uniqueness rule locally in each region and accept that the key must be retained long enough for the slower region to see it. This adds a retention‑policy consideration that was not a primary focus in the original incident.\n\n**NEXT STEPS**  \n1. **API change** – Require callers to supply a UUID‑style idempotency key with every payment request. Document the required format and lifetime.  \n2. **Database schema** – Add a `payment_idempotency_keys` table (customer_id, key, payment_id, created_at) with a unique index on (customer_id, key). Ensure inserts are performed in the same transaction that creates the payment intent.  \n3. **Regression test** – Write a pytest that fires two concurrent requests with the same key against a staging deployment of both regions and asserts that only one payment record is persisted and both responses are identical.  \n\n**CONFIDENCE & MISSING EVIDENCE**  \n**MEDIUM** – The evidence directly supports the idempotency‑key pattern for duplicate‑payment races, and the current scenario aligns with that pattern. However, we lack concrete measurements on how long keys must be retained across regions and the performance impact of the additional uniqueness check in each isolated database. Gathering latency and retention‑window data would solidify the implementation.",
+    "sources": [
+      {
+        "source_id": "DOC-002",
+        "title": "Duplicate payments on retry: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "MENTOR-013",
+        "title": "Mentoring 13: Unknown checkout timeouts (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "MENTOR-014",
+        "title": "Mentoring 14: Payment gateway slowdown (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "COM-010",
+        "title": "Commit series: Payment gateway slowdown",
+        "type": "commit"
+      }
+    ]
+  },
+  "V3-02-11::baseline": {
+    "answer": "**What happened**\n\nDuring a schema‑migration the team started a **back‑fill** that writes to the same rows that the checkout service locks while it is processing orders.  \nWhen the back‑fill runs at the same time as the normal checkout peak, the extra write‑locks cause a spike in lock‑contention, which in turn shows up as checkout time‑outs.\n\n**How the team should respond**\n\n| Action | Why it helps | Evidence |\n|--------|--------------|----------|\n| **1. Immediately throttle or pause the back‑fill** while the checkout traffic is at its peak.  A back‑fill that runs in large, continuous batches is the most common cause of lock spikes.  Stopping it gives the checkout service a chance to clear the backlog and restores normal latency. | Reduces concurrent write‑locks on the same rows. | INC‑007 describes a similar situation where a back‑fill was causing failures and the fix was to “backfill in batches” and only enforce the constraint after the back‑fill completed. |\n| **2. Switch to a *batched, rate‑limited* back‑fill** (e.g., a few thousand rows per minute) and schedule it for off‑peak windows.  Use a “expand‑backfill‑contract” pattern: add the new column as **nullable**, deploy code that works with both the old and new schema, run the back‑fill, then make the column `NOT NULL`. | Keeps lock contention low and guarantees zero‑downtime schema changes. | INC‑007 explicitly recommends “add nullable column, deploy dual‑compatible code, backfill in batches, then enforce constraint.” |\n| **3. Add monitoring and alerts for lock‑wait time and checkout latency**.  Correlate lock metrics with back‑fill progress so you can automatically pause the job if lock‑wait exceeds a threshold. | Gives early visibility before customers notice time‑outs. | The checkout‑timeout PR (PR‑009 / DOC‑009) stresses the need for “correlation IDs” and “operational recovery” that can be triggered when tracing overhead or latency rises. |\n| **4. Adjust quota / circuit‑breaker settings for the back‑fill job**.  Treat the back‑fill as a separate tenant and enforce a global limit on the number of concurrent write‑locks it can hold. | Prevents a single job from overwhelming the database during peak traffic. | DOC‑008 describes “adjust quota configuration quickly while keeping a protective global circuit limit” for partner traffic spikes, a pattern that applies equally to internal back‑fill jobs. |\n| **5. Reduce tracing or instrumentation overhead if it contributes to latency**.  Keep only essential spans (validation, DB, payment) and redact sensitive data. | Prevents additional CPU/IO pressure that could exacerbate lock contention. | DOC‑009 and COM‑009 note that “reduce tracing sampling if overhead rises, retaining essential metrics.” |\n| **6. Verify the fix with a reproducible test**: create a trace that reproduces the timeout, confirm that the back‑fill no longer creates lock spikes, and ensure no sensitive payloads appear in traces. | Guarantees that the root‑cause is isolated and the mitigation works before re‑enabling the back‑fill at full speed. | PR‑009 and DOC‑009 require “reproduce timeouts and demonstrate root‑cause isolation from a single trace.” |\n\n**Summary of the response**\n\n1. **Pause / throttle** the back‑fill during checkout peaks.  \n2. **Run the back‑fill in small, rate‑limited batches** and only after the job finishes, enforce any new `NOT NULL` constraints (expand‑backfill‑contract).  \n3. **Add real‑time lock‑wait and checkout‑latency monitoring** with correlation IDs so the job can be auto‑paused if contention rises.  \n4. **Apply quota / circuit‑breaker limits** to the back‑fill job to keep its lock usage within safe bounds.  \n5. **Trim tracing overhead** to the minimum needed for observability, redacting any payment data.  \n6. **Validate the change with a reproducible test** that isolates the timeout in a single trace.\n\nFollowing these steps will eliminate the lock spikes, keep checkout latency within SLA, and preserve the zero‑downtime guarantee of the migration.",
+    "sources": [
+      {
+        "source_id": "PR-009",
+        "title": "PR review: Unknown checkout timeouts",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "DOC-009",
+        "title": "Unknown checkout timeouts: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "INC-007",
+        "title": "Incident: Zero-downtime schema change",
+        "type": "incident"
+      },
+      {
+        "source_id": "COM-009",
+        "title": "Commit series: Unknown checkout timeouts",
+        "type": "commit"
+      },
+      {
+        "source_id": "DOC-008",
+        "title": "Partner traffic spikes: system notes",
+        "type": "technical_document"
+      }
+    ]
+  }
+}

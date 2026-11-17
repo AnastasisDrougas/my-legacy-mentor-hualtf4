@@ -1,0 +1,51 @@
+
+[
+  {
+    "id": "EVAL-001",
+    "category": "database_decision",
+    "question": "Our Orders API has slow requests. Query plans show efficient index usage, but we now have frequent concurrent write contention and database lock errors. Should we keep adding indexes or investigate PostgreSQL migration? Explain your decision.",
+    "expected_decision": "Investigate the write contention and seriously evaluate PostgreSQL rather than automatically adding indexes.",
+    "expected_reasoning": [
+      "Recognizes that this differs from the historical full-scan incident",
+      "Uses evidence rather than blindly repeating an old decision",
+      "Considers concurrency requirements",
+      "Proposes measurements and a safe migration plan"
+    ]
+  },
+  {
+    "id": "EVAL-002",
+    "category": "security",
+    "question": "A production endpoint exposes customer orders across tenants. A developer proposes keeping the endpoint online while a permanent authorization fix is prepared. What should we do immediately, and why?",
+    "expected_decision": "Stop unauthorized access immediately through a safe containment measure, then implement and verify tenant-scoped authorization.",
+    "expected_reasoning": [
+      "Prioritizes customer data protection",
+      "Distinguishes containment from permanent remediation",
+      "Requires authorization regression tests",
+      "Does not recommend leaving the vulnerability exposed"
+    ]
+  },
+  {
+    "id": "EVAL-003",
+    "category": "payment_reliability",
+    "question": "Our payment provider sometimes times out after committing a payment. Clients retry the request, and duplicate charges are possible. Should we simply disable retries, or is there a safer design?",
+    "expected_decision": "Use persistent idempotency keys and transactional duplicate protection instead of relying only on disabled retries.",
+    "expected_reasoning": [
+      "Recognizes uncertain outcomes after timeouts",
+      "Requires persistent idempotency controls",
+      "Considers concurrent requests",
+      "Explains verification through retry and race-condition tests"
+    ]
+  },
+  {
+    "id": "EVAL-004",
+    "category": "deployment_risk",
+    "question": "A new optional feature improves recommendations but increases checkout latency during a canary rollout. The product manager wants to deploy it to everyone before investigating. What should we recommend?",
+    "expected_decision": "Stop or disable the problematic canary, investigate measurements, and resume only after guardrails are satisfied.",
+    "expected_reasoning": [
+      "Prioritizes stability over premature rollout",
+      "Uses latency and error-rate evidence",
+      "Recommends a reversible feature-flag action",
+      "Defines conditions for a safe gradual rollout"
+    ]
+  }
+]

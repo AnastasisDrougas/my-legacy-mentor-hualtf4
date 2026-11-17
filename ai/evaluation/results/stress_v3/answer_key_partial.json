@@ -1,0 +1,102 @@
+{
+  "V3-01-01": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "V3-01-02": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "V3-01-03": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "V3-01-04": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "V3-01-05": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "V3-01-06": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "V3-01-07": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "V3-01-08": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "V3-01-09": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "V3-01-10": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "V3-01-11": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "V3-01-12": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "V3-01-13": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "V3-01-14": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "V3-01-15": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "V3-02-01": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "V3-02-02": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "V3-02-03": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "V3-02-04": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "V3-02-05": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "V3-02-06": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "V3-02-07": {
+    "A": "ask",
+    "B": "baseline"
+  },
+  "V3-02-08": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "V3-02-09": {
+    "A": "baseline",
+    "B": "ask"
+  },
+  "V3-02-10": {
+    "A": "baseline",
+    "B": "ask"
+  }
+}

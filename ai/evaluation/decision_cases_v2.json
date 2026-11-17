@@ -1,0 +1,63 @@
+
+[
+  {
+    "id": "HOLD-001",
+    "category": "database",
+    "question": "SQLite queries are fast, but concurrent writes now produce database lock errors. A teammate wants another composite index. What would be your recommendation?",
+    "expected_decision": "Diagnose write contention, avoid unnecessary indexes, and evaluate concurrency improvements or PostgreSQL using measurements."
+  },
+  {
+    "id": "HOLD-002",
+    "category": "payments",
+    "question": "Two concurrent payment requests carry the same idempotency key. Both can reach the external provider before our database transaction commits. How should we prevent double charges?",
+    "expected_decision": "Use atomic reservation of the idempotency key, safe in-flight handling, and provider-side idempotency or reconciliation."
+  },
+  {
+    "id": "HOLD-003",
+    "category": "security",
+    "question": "A cross-tenant authorization vulnerability is active in production. Product wants the endpoint kept online because customers rely on it. What should happen?",
+    "expected_decision": "Contain the exposure immediately before deploying and verifying a narrow authorization fix."
+  },
+  {
+    "id": "HOLD-004",
+    "category": "deployment",
+    "question": "A feature canary has good functionality but checkout p95 latency has increased. Management requests a full rollout today. How should the team respond?",
+    "expected_decision": "Halt the expansion, contain the regression, inspect measurements, and resume gradually after guardrails are met."
+  },
+  {
+    "id": "HOLD-005",
+    "category": "reliability",
+    "question": "A database transaction succeeds, but publishing the corresponding event sometimes fails. Would adding more HTTP retries guarantee consistency?",
+    "expected_decision": "Address the transaction-event consistency gap with a durable outbox or equivalent reliable delivery mechanism."
+  },
+  {
+    "id": "HOLD-006",
+    "category": "backward_compatibility",
+    "question": "A new API version removes a field used by older mobile clients. The new implementation is cleaner. Should the old field be removed immediately?",
+    "expected_decision": "Preserve compatibility or use a measured, staged deprecation strategy with consumer verification."
+  },
+  {
+    "id": "HOLD-007",
+    "category": "observability",
+    "question": "API latency increased after deployment, but no reliable traces or request-level metrics exist. A developer proposes rewriting the database layer. What should we do first?",
+    "expected_decision": "Establish observability, reproduce and diagnose the root cause before approving a large rewrite."
+  },
+  {
+    "id": "HOLD-008",
+    "category": "rollback",
+    "question": "A new deployment changes the data format permanently. The team has no tested rollback path, but automated tests pass. Is it safe to deploy?",
+    "expected_decision": "Address migration compatibility and recovery before deployment rather than relying only on passing tests."
+  },
+  {
+    "id": "HOLD-009",
+    "category": "critical_path",
+    "question": "A nonessential recommendation service occasionally times out and blocks checkout requests. What design change should be prioritized?",
+    "expected_decision": "Protect checkout using bounded timeouts, fallback or isolation of the optional dependency."
+  },
+  {
+    "id": "HOLD-010",
+    "category": "fairness",
+    "question": "A shared worker pool allows one large tenant to consume nearly all capacity. Other tenants experience severe delays. Would increasing the worker count alone be sufficient?",
+    "expected_decision": "Investigate tenant isolation and fair resource allocation, not only total capacity."
+  }
+]

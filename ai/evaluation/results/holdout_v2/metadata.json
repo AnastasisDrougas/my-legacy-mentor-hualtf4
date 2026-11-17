@@ -1,0 +1,8 @@
+{
+  "cases_sha256": "2cb2fe8769fb29c76a0d9d2e8004800a7ac6dccedd5b98385b864a07b4e6d902",
+  "modes": [
+    "baseline",
+    "ask"
+  ],
+  "top_k": 5
+}

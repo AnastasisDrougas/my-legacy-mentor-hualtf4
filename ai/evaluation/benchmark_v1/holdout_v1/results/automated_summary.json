@@ -1,0 +1,39 @@
+{
+  "benchmark": "knowledge_legacy_ai_120_case_holdout_v1",
+  "status": "NOT_INDEPENDENTLY_GRADED",
+  "cases": 120,
+  "expected_responses": 240,
+  "saved_responses": 240,
+  "complete": true,
+  "systems": {
+    "digital_twin": {
+      "answers_saved": 120,
+      "avg_latency_seconds": 7.201,
+      "avg_answer_characters": 1803.1417,
+      "valid_citation_id_rate_among_answers_with_citations": 1.0,
+      "provisional_ADR_anchor_recall_known_only": 0.645,
+      "category_counts": {
+        "known": 30,
+        "adaptation": 30,
+        "composite": 25,
+        "unknown": 20,
+        "adversarial": 15
+      }
+    },
+    "baseline_rag": {
+      "answers_saved": 120,
+      "avg_latency_seconds": 6.5314,
+      "avg_answer_characters": 1061.6917,
+      "valid_citation_id_rate_among_answers_with_citations": 1.0,
+      "provisional_ADR_anchor_recall_known_only": 0.655,
+      "category_counts": {
+        "known": 30,
+        "adaptation": 30,
+        "composite": 25,
+        "unknown": 20,
+        "adversarial": 15
+      }
+    }
+  },
+  "important": "Valid citation IDs are NOT proof of factual grounding. Provisional ADR anchors are NOT exhaustive qrels. Accuracy/F1/abstention/persona need independent human labels before claiming superiority."
+}

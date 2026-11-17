@@ -1,0 +1,890 @@
+[
+  {
+    "case_id": "DEV-007",
+    "category": "historical_adaptation",
+    "system": "digital_twin",
+    "mode": "ask",
+    "question": "A new mandatory database field must be introduced while older application instances are still serving requests. What deployment sequence is safe?",
+    "answer": "RECOMMENDATION\nUse the expand-backfill-contract pattern: add a nullable column, deploy dual-compatible application code, backfill data in batches, and only then enforce the mandatory (NOT NULL) constraint [ADR-007, MENTOR-011, COM-007].\n\nHISTORICAL PRECEDENT\nTo handle zero-downtime schema changes safely when mixed application versions run simultaneously, the historical approach used a staged rollout sequence: add a nullable column, deploy dual-compatible code, backfill in batches, and finally enforce constraints [ADR-007, MENTOR-011, COM-007].\n\nWHY IT APPLIES OR DIFFERS\nThe current problem matches historical constraints where older application instances continue serving requests while a schema modification is underway. Applying a destructive constraint (such as a direct `NOT NULL` or mandatory field addition) during deployment causes insert failures on older worker versions that are unaware of the new field [MENTOR-011]. \n\nNEXT STEPS\n1. Add the new database field as a nullable column so older application instances can continue inserting rows without failure [ADR-007, MENTOR-011].\n2. Deploy dual-compatible application code capable of handling both the presence and absence of the field.\n3. Backfill existing rows in controlled batches, then run mixed-version deployment tests to confirm no insert failures or lock spikes occur before enforcing the mandatory constraint [ADR-007, COM-007].\n\nCONFIDENCE & MISSING EVIDENCE\nHIGH. The technical constraints and risks of mixed-version deployments with schema changes are directly addressed by the documented expand-backfill-contract pattern [ADR-007, MENTOR-011, COM-007].",
+    "sources": [
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "ADR-012",
+        "title": "ADR: Risky recommendation rollout",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "ADR-007",
+        "title": "ADR: Zero-downtime schema change",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-011",
+        "title": "Mentoring 11: Zero-downtime schema change (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "COM-007",
+        "title": "Commit series: Zero-downtime schema change",
+        "type": "commit"
+      }
+    ],
+    "latency_seconds": 2.307,
+    "timestamp_utc": "2026-11-14T12:09:56.697516+00:00"
+  },
+  {
+    "case_id": "DEV-007",
+    "category": "historical_adaptation",
+    "system": "baseline_rag",
+    "mode": "baseline",
+    "question": "A new mandatory database field must be introduced while older application instances are still serving requests. What deployment sequence is safe?",
+    "answer": "To safely introduce a new mandatory database field while older application instances are still serving requests, use the **expand-backfill-contract** deployment sequence [ADR-007, MENTOR-011, PR-007]. \n\nThe safe deployment sequence consists of the following steps:\n1. **Expand:** Add a new **nullable** column to the database schema [ADR-007, MENTOR-011]. (Do not apply a `NOT NULL` constraint prematurely, as older application instances will continue to insert rows without the new field [MENTOR-011]).\n2. **Deploy dual-compatible code:** Deploy application code that can handle both the presence and absence of the new field [ADR-007].\n3. **Backfill:** Populate the data for the new column in batches [ADR-007].\n4. **Enforce constraint:** Once the backfill is complete and all application instances are updated, enforce the final constraint (such as `NOT NULL`) [ADR-007].\n\n**Additional validation and safety precautions:**\n* Run mixed-version deployment tests to verify there are no insert failures or lock spikes during the backfill process [ADR-007, COM-007, PR-007, DOC-007].\n* For operational recovery, if a rollback is needed, roll back the application behavior while keeping the backward-compatible column, and never drop populated data blindly [ADR-007, COM-007, DOC-007].",
+    "sources": [
+      {
+        "source_id": "ADR-007",
+        "title": "ADR: Zero-downtime schema change",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-011",
+        "title": "Mentoring 11: Zero-downtime schema change (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "COM-007",
+        "title": "Commit series: Zero-downtime schema change",
+        "type": "commit"
+      },
+      {
+        "source_id": "PR-007",
+        "title": "PR review: Zero-downtime schema change",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "DOC-007",
+        "title": "Zero-downtime schema change: system notes",
+        "type": "technical_document"
+      }
+    ],
+    "latency_seconds": 1.741,
+    "timestamp_utc": "2026-11-14T12:09:58.438954+00:00"
+  },
+  {
+    "case_id": "DEV-012",
+    "category": "historical_adaptation",
+    "system": "digital_twin",
+    "mode": "ask",
+    "question": "A limited rollout improves average latency but causes a subset of checkout requests to become much slower. What should the release team do?",
+    "answer": "RECOMMENDATION\nHalt the rollout, inspect request tracing and connection pool metrics to isolate why a subset of checkout requests is timing out or stalling, and apply explicit timeouts and bounded concurrency rather than relying on average latency metrics.\n\nHISTORICAL PRECEDENT\nIn past incidents involving payment gateway slowdowns and unknown checkout timeouts, connection pool metrics revealed that requests waited prolonged periods without timeouts or concurrency caps [PR-010, DOC-010], and logs lacked correlation IDs to isolate slow dependencies [DOC-009, PR-009]. The established response was to introduce explicit timeouts, bounded concurrency, circuit breakers [PR-010, COM-010], and proper tracing correlation [DOC-009, PR-009].\n\nWHY IT APPLIES OR DIFFERS\nThe current situation shares a critical symptom with historical cases: an aggregate metric (average latency) looks positive while a subset of requests experiences severe degradation (becoming much slower). However, the evidence provided does not explicitly confirm whether the bottleneck stems from the payment gateway, database operations, or uninstrumented spans. Therefore, we cannot blindly assume the exact same code fix applies without first gathering telemetry.\n\nNEXT STEPS\n1. Inspect correlation IDs and request traces for the slow subset of checkout requests to identify the lagging dependency [DOC-009, PR-009].\n2. Check connection pool metrics and downstream dependency wait times to see if workers are blocked without timeouts or concurrency limits [PR-010, DOC-010].\n3. Roll back or pause the limited rollout if user-facing checkout reliability is compromised, adhering to production safety principles.\n\nCONFIDENCE & MISSING EVIDENCE\n**Confidence:** MEDIUM  \n**Explanation:** The principles of observability and bounded concurrency clearly apply to tail-latency degradation during rollouts [DOC-009, PR-009, PR-010, DOC-010]. However, direct evidence pinpointing the exact bottleneck in this specific rollout (e.g., payment gateway vs. database) is missing, so we must collect telemetry before applying a specific mitigation.",
+    "sources": [
+      {
+        "source_id": "DOC-009",
+        "title": "Unknown checkout timeouts: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "PR-009",
+        "title": "PR review: Unknown checkout timeouts",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "PR-010",
+        "title": "PR review: Payment gateway slowdown",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "COM-010",
+        "title": "Commit series: Payment gateway slowdown",
+        "type": "commit"
+      },
+      {
+        "source_id": "DOC-010",
+        "title": "Payment gateway slowdown: system notes",
+        "type": "technical_document"
+      }
+    ],
+    "latency_seconds": 2.401,
+    "timestamp_utc": "2026-11-14T12:10:00.841622+00:00"
+  },
+  {
+    "case_id": "DEV-012",
+    "category": "historical_adaptation",
+    "system": "baseline_rag",
+    "mode": "baseline",
+    "question": "A limited rollout improves average latency but causes a subset of checkout requests to become much slower. What should the release team do?",
+    "answer": "Based on the provided evidence, when dealing with checkout timeouts or payment gateway slowdowns that cause requests to become much slower or tie up application workers, the recommended mitigation and investigation approach involves:\n\n1. **Root-Cause Isolation and Tracing:** \n   - Inspect logs using correlation IDs (as logs lacking them and aggregated timings can obscure slow dependencies) [DOC-009, PR-009].\n   - Ensure spans are added for validation, database operations, and payment calls with safe redaction, and reproduce the timeouts in a seeded staging environment to demonstrate root-cause isolation [DOC-009, PR-009].\n\n2. **Implementing Payment Integration Safeguards:**\n   - Introduce explicit timeouts, bounded concurrency, and a circuit breaker for the payment dependency to prevent slow payment requests from tying up all application workers and impacting unrelated endpoints [PR-010, DOC-010].\n   - Fault-inject gateway latency to verify that unrelated read endpoints stay healthy while payment calls fail predictably [PR-010, COM-010, DOC-010].\n   - Tune breaker thresholds carefully, ensure non-idempotent payments are not blindly retried, and make operational recovery explicit [PR-009, PR-010, COM-010].",
+    "sources": [
+      {
+        "source_id": "DOC-009",
+        "title": "Unknown checkout timeouts: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "PR-009",
+        "title": "PR review: Unknown checkout timeouts",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "PR-010",
+        "title": "PR review: Payment gateway slowdown",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "COM-010",
+        "title": "Commit series: Payment gateway slowdown",
+        "type": "commit"
+      },
+      {
+        "source_id": "DOC-010",
+        "title": "Payment gateway slowdown: system notes",
+        "type": "technical_document"
+      }
+    ],
+    "latency_seconds": 1.614,
+    "timestamp_utc": "2026-11-14T12:10:02.456096+00:00"
+  },
+  {
+    "case_id": "DEV-001",
+    "category": "historical_adaptation",
+    "system": "digital_twin",
+    "mode": "ask",
+    "question": "An existing composite index helped order searches, but a new workload has slow writes and different filters. How should the team decide whether to retain the index?",
+    "answer": "RECOMMENDATION\nEvaluate the index performance against the new workload's write latency and distinct filter patterns using a seeded staging environment before deciding to retain, modify, or drop the composite index.\n\nHISTORICAL PRECEDENT\nHistorically, the team addressed order lookup latency by adding a composite index on `(customer_id, created_at)`, removing `SELECT *` projections, and measuring query performance before considering database migrations [ADR-001, MENTOR-002]. The documented principle is that index column order must match the filter and sorting pattern, noting the trade-off that indices increase write costs and require verification against realistic data skew [ADR-001, DOC-001].\n\nWHY IT APPLIES OR DIFFERS\nThe historical context dealt with optimizing order lookups where matching filter and sorting patterns were critical [ADR-001]. However, the current situation introduces a *new workload* featuring *slow writes* and *different filters*. Because the new filters may not align with the existing composite index columns, the index may be imposing write overhead without benefiting the new read patterns. Therefore, the historical solution of keeping that exact composite index cannot be blindly applied without verifying whether it matches the new filter requirements.\n\nNEXT STEPS\n1. Replicate the new workload and data skew in a seeded staging environment to measure current p50/p95 latency and query plans [DOC-001].\n2. Check if the existing composite index column order matches the new workload's filter and sorting patterns [ADR-001].\n3. Test dropping or modifying the index to quantify the trade-off between write latency improvement and read performance regression.\n\nCONFIDENCE & MISSING EVIDENCE\nMEDIUM\nConfidence is medium because while the engineering framework (measuring trade-offs, matching filter/sorting patterns) is well-documented [ADR-001, DOC-001], we lack specific telemetry on the new workload's exact filter columns and the precise write-versus-read latency impact in production.",
+    "sources": [
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-001",
+        "title": "Incident: Order lookup latency",
+        "type": "incident"
+      },
+      {
+        "source_id": "DOC-001",
+        "title": "Order lookup latency: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "PR-001",
+        "title": "PR review: Order lookup latency",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-002",
+        "title": "Mentoring 02: Order lookup latency (incident response)",
+        "type": "mentoring"
+      }
+    ],
+    "latency_seconds": 2.692,
+    "timestamp_utc": "2026-11-14T12:12:38.677978+00:00"
+  },
+  {
+    "case_id": "DEV-001",
+    "category": "historical_adaptation",
+    "system": "baseline_rag",
+    "mode": "baseline",
+    "question": "An existing composite index helped order searches, but a new workload has slow writes and different filters. How should the team decide whether to retain the index?",
+    "answer": "To decide whether to retain the existing composite index given a new workload with slow writes and different filters, the team should evaluate the trade-offs and follow documented validation steps:\n\n1. **Evaluate Column Order and Patterns:** Ensure that the index column order matches the new filter and sorting pattern [ADR-001]. A mismatch renders the index ineffective for the new filters.\n2. **Weigh Write Costs vs. Read Performance:** Recognize that indexes increase write costs and require verification against realistic data skew [ADR-001]. \n3. **Compare Latency and Query Plans:** Use a seeded staging environment to compare p50/p95 latency and query plans using the same workload, with an acceptance criterion requiring p95 latency to remain below 180 ms [DOC-001].\n4. **Operational Recovery Plan:** Drop the index if write latency or query plans regress [DOC-001].",
+    "sources": [
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-001",
+        "title": "Incident: Order lookup latency",
+        "type": "incident"
+      },
+      {
+        "source_id": "DOC-001",
+        "title": "Order lookup latency: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "PR-001",
+        "title": "PR review: Order lookup latency",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-002",
+        "title": "Mentoring 02: Order lookup latency (incident response)",
+        "type": "mentoring"
+      }
+    ],
+    "latency_seconds": 1.423,
+    "timestamp_utc": "2026-11-14T12:12:40.102512+00:00"
+  },
+  {
+    "case_id": "DEV-002",
+    "category": "historical_adaptation",
+    "system": "digital_twin",
+    "mode": "ask",
+    "question": "A checkout client retries after losing the payment response. How should the service avoid creating a second payment intent?",
+    "answer": "RECOMMENDATION\nRequire clients to provide an idempotency key with checkout requests (`POST /payments`), enforce uniqueness per customer in persistent storage, and return the original stored result when a safe retry occurs [ADR-002, COM-002, INC-002].\n\nHISTORICAL PRECEDENT\nDuring production incidents where transient network failures caused clients to retry requests and create duplicate payment intents, the documented engineering response was to require a client-provided idempotency key, enforce uniqueness per customer in storage, and return the original result on safe retries [ADR-002, INC-002, DOC-002, COM-002]. An alternative to disable client retries entirely was considered and rejected [ADR-002, COM-002].\n\nWHY IT APPLIES OR DIFFERS\nThe current situation matches the historical context: transient network failures cause retries that risk duplicate payment intents on `POST /payments` [ADR-002, INC-002]. The core constraint—protecting external financial transactions against duplicate client transmissions—remains identical. \n\nNEXT STEPS\n1. Implement client-provided idempotency key validation on the `POST /payments` endpoint.\n2. Enforce transactional uniqueness constraints per customer in storage to safely handle concurrent retries.\n3. Add regression tests and replay concurrent duplicate requests to verify a stable response and a single payment intent [COM-002, DOC-002].\n\nCONFIDENCE & MISSING EVIDENCE\nHIGH: Direct historical precedent and matching production failure modes are documented in the retrieved evidence for the checkout API [ADR-002, INC-002, DOC-002].",
+    "sources": [
+      {
+        "source_id": "ADR-002",
+        "title": "ADR: Duplicate payments on retry",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "COM-002",
+        "title": "Commit series: Duplicate payments on retry",
+        "type": "commit"
+      },
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "DOC-002",
+        "title": "Duplicate payments on retry: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "MENTOR-003",
+        "title": "Mentoring 03: Duplicate payments on retry (diagnosis)",
+        "type": "mentoring"
+      }
+    ],
+    "latency_seconds": 1.866,
+    "timestamp_utc": "2026-11-14T12:12:41.969023+00:00"
+  },
+  {
+    "case_id": "DEV-002",
+    "category": "historical_adaptation",
+    "system": "baseline_rag",
+    "mode": "baseline",
+    "question": "A checkout client retries after losing the payment response. How should the service avoid creating a second payment intent?",
+    "answer": "To avoid creating a second payment intent when a client retries after losing a payment response, the service should implement the following approach:\n\n* **Require a client-provided idempotency key** on requests to the checkout API [ADR-002].\n* **Enforce uniqueness per customer** in storage [ADR-002].\n* **Return the original result** on safe retries [ADR-002].",
+    "sources": [
+      {
+        "source_id": "ADR-002",
+        "title": "ADR: Duplicate payments on retry",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "COM-002",
+        "title": "Commit series: Duplicate payments on retry",
+        "type": "commit"
+      },
+      {
+        "source_id": "INC-002",
+        "title": "Incident: Duplicate payments on retry",
+        "type": "incident"
+      },
+      {
+        "source_id": "DOC-002",
+        "title": "Duplicate payments on retry: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "MENTOR-003",
+        "title": "Mentoring 03: Duplicate payments on retry (diagnosis)",
+        "type": "mentoring"
+      }
+    ],
+    "latency_seconds": 1.015,
+    "timestamp_utc": "2026-11-14T12:12:42.984766+00:00"
+  },
+  {
+    "case_id": "DEV-003",
+    "category": "historical_adaptation",
+    "system": "digital_twin",
+    "mode": "ask",
+    "question": "Marketing emails overwhelm order confirmation messages while repeated failures keep reentering the queue. What architecture should be used?",
+    "answer": "RECOMMENDATION\nSeparate transactional order-confirmation messages from bulk marketing email workloads, implement capped retries with exponential backoff, and introduce dead-letter handling for repeatedly failing messages [ADR-003].\n\nHISTORICAL PRECEDENT\nDuring an incident where marketing bursts delayed order-confirmation emails by 18 minutes while queue depth climbed and retry fractions grew, Alex Morgan recommended separating transactional messages from bulk email workloads, capping retries with exponential backoff, and adding dead-letter handling [ADR-003, INC-003]. The team explicitly rejected increasing the worker count indefinitely [ADR-003].\n\nWHY IT APPLIES OR DIFFERS\nThe current problem statement (\"Marketing emails overwhelm order confirmation messages while repeated failures keep reentering the queue\") matches the core failure mode and constraints documented in the historical incident and architecture decision records [ADR-003, INC-003]. Both situations involve bulk workloads starving critical transactional paths and unconstrained retries reentering the queue. \n\n*Trade-offs:* While this architecture protects critical paths, separate queues increase operational configuration overhead and require careful fair-share limits [MENTOR-006].\n\nNEXT STEPS\n1. Implement isolated routing queues or priority lanes to segregate marketing bursts from order confirmations [ADR-003].\n2. Configure bounded retry policies featuring exponential backoff alongside a dead-letter queue for poison messages [ADR-003].\n3. Load-test the notification worker against 5x peak mail traffic to verify that transactional queue delay stays below acceptable thresholds [DOC-003, PR-003].\n\nCONFIDENCE & MISSING EVIDENCE\nHIGH. The current problem directly mirrors the documented historical context, constraints, and symptoms for which an explicit architectural decision and verification standard were recorded [DOC-003, ADR-003, INC-003].",
+    "sources": [
+      {
+        "source_id": "DOC-003",
+        "title": "Email queue pressure: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-003",
+        "title": "ADR: Email queue pressure",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-003",
+        "title": "Incident: Email queue pressure",
+        "type": "incident"
+      },
+      {
+        "source_id": "MENTOR-006",
+        "title": "Mentoring 06: Email queue pressure (incident response)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "PR-003",
+        "title": "PR review: Email queue pressure",
+        "type": "pull_request"
+      }
+    ],
+    "latency_seconds": 3.083,
+    "timestamp_utc": "2026-11-14T12:12:46.069125+00:00"
+  },
+  {
+    "case_id": "DEV-003",
+    "category": "historical_adaptation",
+    "system": "baseline_rag",
+    "mode": "baseline",
+    "question": "Marketing emails overwhelm order confirmation messages while repeated failures keep reentering the queue. What architecture should be used?",
+    "answer": "To address the issue where marketing emails overwhelm order confirmation messages and repeated failures re-enter the queue, the recommended architecture and mitigation strategy is to:\n\n1. **Separate transactional messages from bulk email workloads** (using separate queues to prevent marketing bursts from starving critical order confirmations) [ADR-003, INC-003, MENTOR-006, PR-003].\n2. **Cap retries with exponential backoff** to prevent failing messages from infinitely looping and clogging the queue [ADR-003, INC-003, MENTOR-006, PR-003].\n3. **Add dead-letter handling** to safely route permanently failing messages out of the active queue [ADR-003, INC-003, MENTOR-006, PR-003].\n\n*Note:* While separate queues solve the prioritization problem, they introduce the operational trade-off of increased configuration complexity and the need for careful fair-share limits [MENTOR-006].",
+    "sources": [
+      {
+        "source_id": "DOC-003",
+        "title": "Email queue pressure: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-003",
+        "title": "ADR: Email queue pressure",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-003",
+        "title": "Incident: Email queue pressure",
+        "type": "incident"
+      },
+      {
+        "source_id": "MENTOR-006",
+        "title": "Mentoring 06: Email queue pressure (incident response)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "PR-003",
+        "title": "PR review: Email queue pressure",
+        "type": "pull_request"
+      }
+    ],
+    "latency_seconds": 1.297,
+    "timestamp_utc": "2026-11-14T12:12:47.367419+00:00"
+  },
+  {
+    "case_id": "DEV-004",
+    "category": "historical_adaptation",
+    "system": "digital_twin",
+    "mode": "ask",
+    "question": "An authenticated user can retrieve another customer's order by changing its ID. What should be fixed?",
+    "answer": "RECOMMENDATION\nApply tenant scoping to repository queries and add negative authorization tests at the API boundary [ADR-004].\n\nHISTORICAL PRECEDENT\nWhen faced with cross-tenant order exposure where a route verified authentication but fetched records solely by `order_id` omitting `tenant_id`, the historical decision was to apply tenant scoping in repository queries and add negative authorization tests at the API boundary [ADR-004, MENTOR-007, INC-004]. The core reasoning was that authentication must never be treated as proof of resource ownership [ADR-004].\n\nWHY IT APPLIES OR DIFFERS\nThe current problem—an authenticated user retrieving another customer's order by changing its ID—directly matches the root cause identified in the historical incidents and documentation: the system checked authentication but the query omitted `tenant_id` [DOC-004, INC-004]. Therefore, the security-first principle and underlying constraints directly apply here. \n\nNEXT STEPS\n1. Modify repository queries to explicitly scope records by `tenant_id` alongside `order_id` [ADR-004].\n2. Implement negative authorization tests at the API boundary to verify that unauthorized cross-tenant attempts return appropriate `403` or `404` status codes without information leakage [PR-004, ADR-004].\n3. Audit all read and export paths to ensure tenant scoping is consistently enforced [ADR-004].\n\nCONFIDENCE & MISSING EVIDENCE\nHIGH. There is direct evidence and a matching condition where the failure mode (missing tenant scoping on queries despite valid authentication) and the validated fix are thoroughly documented across multiple sources [DOC-004, INC-004, ADR-004].",
+    "sources": [
+      {
+        "source_id": "MENTOR-007",
+        "title": "Mentoring 07: Cross-tenant order exposure (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "PR-004",
+        "title": "PR review: Cross-tenant order exposure",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "DOC-004",
+        "title": "Cross-tenant order exposure: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "INC-004",
+        "title": "Incident: Cross-tenant order exposure",
+        "type": "incident"
+      },
+      {
+        "source_id": "ADR-004",
+        "title": "ADR: Cross-tenant order exposure",
+        "type": "architecture_decision"
+      }
+    ],
+    "latency_seconds": 2.076,
+    "timestamp_utc": "2026-11-14T12:12:49.445348+00:00"
+  },
+  {
+    "case_id": "DEV-004",
+    "category": "historical_adaptation",
+    "system": "baseline_rag",
+    "mode": "baseline",
+    "question": "An authenticated user can retrieve another customer's order by changing its ID. What should be fixed?",
+    "answer": "Based on the provided evidence, the issue occurs because the route verifies authentication, but the database query fetches records only by `order_id` while omitting `tenant_id` [DOC-004]. \n\nTo fix this vulnerability, the following actions should be taken:\n* Apply tenant scoping in repository queries [ADR-004].\n* Add negative authorization tests at the API boundary to verify that cross-tenant requests return a 403 or 404 without information leakage [PR-004, ADR-004].",
+    "sources": [
+      {
+        "source_id": "MENTOR-007",
+        "title": "Mentoring 07: Cross-tenant order exposure (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "PR-004",
+        "title": "PR review: Cross-tenant order exposure",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "DOC-004",
+        "title": "Cross-tenant order exposure: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "INC-004",
+        "title": "Incident: Cross-tenant order exposure",
+        "type": "incident"
+      },
+      {
+        "source_id": "ADR-004",
+        "title": "ADR: Cross-tenant order exposure",
+        "type": "architecture_decision"
+      }
+    ],
+    "latency_seconds": 0.94,
+    "timestamp_utc": "2026-11-14T12:12:50.387037+00:00"
+  },
+  {
+    "case_id": "DEV-005",
+    "category": "historical_adaptation",
+    "system": "digital_twin",
+    "mode": "ask",
+    "question": "The database commits an order but the event broker occasionally fails. How should event delivery be designed?",
+    "answer": "RECOMMENDATION\nImplement a transactional outbox table pattern, publish events asynchronously from the outbox, and ensure that downstream consumers are designed to be idempotent [PR-005, ADR-005].\n\nHISTORICAL PRECEDENT\nDuring the Orion Orders API incident where paid orders occasionally missed order-created events due to crashes occurring between the database commit and the external broker publish, the historical decision was to use a transactional outbox table, publish asynchronously, and make consumers idempotent [INC-005, ADR-005]. Alex Morgan specifically rejected publishing directly before committing the order [ADR-005] and advised against treating the database commit and external message send as a single atomic operation without safeguards [MENTOR-009, INC-005].\n\nWHY IT APPLIES OR DIFFERS\nThe current situation matches the historical root cause: a successful database commit followed by an event broker or external publish failure [DOC-005, INC-005]. Because a single process cannot atomically commit a database transaction and send an external message across network boundaries [MENTOR-009], decoupling them via an outbox table ensures durability of the event alongside the domain data.\n\nNEXT STEPS\n1. Create a transactional outbox table to store events within the same database transaction as the order commit.\n2. Implement an asynchronous publisher process to read from the outbox and deliver messages to the event broker with retry capabilities.\n3. Update downstream consumers to handle duplicate messages safely (idempotency) [PR-005].\n\nCONFIDENCE & MISSING EVIDENCE\nHIGH\nThe current problem directly matches the documented failure mode, constraints, and verified architecture decision from the historical record [ADR-005, INC-005].",
+    "sources": [
+      {
+        "source_id": "DOC-005",
+        "title": "Lost events after transaction: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "PR-005",
+        "title": "PR review: Lost events after transaction",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-009",
+        "title": "Mentoring 09: Lost events after transaction (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "INC-005",
+        "title": "Incident: Lost events after transaction",
+        "type": "incident"
+      },
+      {
+        "source_id": "ADR-005",
+        "title": "ADR: Lost events after transaction",
+        "type": "architecture_decision"
+      }
+    ],
+    "latency_seconds": 1.981,
+    "timestamp_utc": "2026-11-14T12:12:52.369059+00:00"
+  },
+  {
+    "case_id": "DEV-005",
+    "category": "historical_adaptation",
+    "system": "baseline_rag",
+    "mode": "baseline",
+    "question": "The database commits an order but the event broker occasionally fails. How should event delivery be designed?",
+    "answer": "When a database commits an order successfully but the external event broker occasionally fails (causing lost events because a crash occurs between the database commit and the external publish), event delivery should be designed using the following approach [DOC-005, PR-005, INC-005]:\n\n* **Use a transactional outbox table:** Write the event to an outbox table within the same database transaction as the order commit, ensuring atomicity [PR-005, MENTOR-009, ADR-005].\n* **Publish asynchronously:** Read from the outbox table and publish the events to the broker asynchronously [PR-005, INC-005, ADR-005].\n* **Make consumers idempotent:** Ensure that down-stream consumers can handle duplicated messages safely, since asynchronous publishing and retries can result in at-least-once delivery [PR-005, INC-005, ADR-005]. \n\nDirectly publishing before committing the order is an alternative that has been considered and rejected [ADR-005].",
+    "sources": [
+      {
+        "source_id": "DOC-005",
+        "title": "Lost events after transaction: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "PR-005",
+        "title": "PR review: Lost events after transaction",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "MENTOR-009",
+        "title": "Mentoring 09: Lost events after transaction (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "INC-005",
+        "title": "Incident: Lost events after transaction",
+        "type": "incident"
+      },
+      {
+        "source_id": "ADR-005",
+        "title": "ADR: Lost events after transaction",
+        "type": "architecture_decision"
+      }
+    ],
+    "latency_seconds": 1.568,
+    "timestamp_utc": "2026-11-14T12:12:53.941671+00:00"
+  },
+  {
+    "case_id": "DEV-006",
+    "category": "historical_adaptation",
+    "system": "digital_twin",
+    "mode": "ask",
+    "question": "A cached inventory page shows an item in stock although the last item has just sold. Where must correctness be enforced?",
+    "answer": "RECOMMENDATION\nEnforce correctness at checkout by rechecking stock transactionally, while shortening the display cache TTL and invalidating cache keys on stock updates [ADR-006, COM-006, INC-006]. Do not trust the cache at checkout for speed [ADR-006, MENTOR-010].\n\nHISTORICAL PRECEDENT\nIn the Orion Orders API incident where customers saw in-stock labels for items that had sold out minutes earlier (due to a 15-minute cache TTL and missing cache invalidation on the inventory update route), Alex Morgan recommended and implemented shortening the display cache TTL, invalidating keys on stock updates, and rechecking stock transactionally at checkout [ADR-006, COM-006, DOC-006, INC-006]. Trusting the cache at checkout for speed was explicitly rejected [ADR-006, COM-006, MENTOR-010].\n\nWHY IT APPLIES OR DIFFERS\nThe current problem matches the historical failure mode (a cached inventory page showing an item in stock after it has sold out). The engineering principle of correctness over speed applies because product display pages can tolerate minor staleness, but the checkout transaction must guarantee accuracy to prevent overselling.\n\nNEXT STEPS\n1. Shorten the display cache TTL and add cache key invalidation to the inventory update route [ADR-006, INC-006].\n2. Implement a transactional stock recheck directly at checkout to prevent overselling [ADR-006, INC-006].\n3. Add automated regression tests and simulate stock depletion to verify that checkout never oversells with stale read caches [DOC-006, INC-006, COM-006].\n\nCONFIDENCE & MISSING EVIDENCE\nHIGH: Direct historical precedent and matching conditions address this exact inventory cache failure mode [DOC-006, ADR-006, INC-006, MENTOR-010, COM-006].",
+    "sources": [
+      {
+        "source_id": "DOC-006",
+        "title": "Stale inventory display: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-006",
+        "title": "ADR: Stale inventory display",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-006",
+        "title": "Incident: Stale inventory display",
+        "type": "incident"
+      },
+      {
+        "source_id": "MENTOR-010",
+        "title": "Mentoring 10: Stale inventory display (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "COM-006",
+        "title": "Commit series: Stale inventory display",
+        "type": "commit"
+      }
+    ],
+    "latency_seconds": 2.812,
+    "timestamp_utc": "2026-11-14T12:12:56.757852+00:00"
+  },
+  {
+    "case_id": "DEV-006",
+    "category": "historical_adaptation",
+    "system": "baseline_rag",
+    "mode": "baseline",
+    "question": "A cached inventory page shows an item in stock although the last item has just sold. Where must correctness be enforced?",
+    "answer": "Based on the provided evidence, correctness must be enforced transactionally at checkout, ensuring that stock is rechecked during the checkout process rather than trusting the cache for speed [ADR-006, INC-006, COM-006]. \n\nAdditionally, the system mitigates stale display data by shortening the display cache TTL and invalidating cache keys upon stock updates [ADR-006, INC-006].",
+    "sources": [
+      {
+        "source_id": "DOC-006",
+        "title": "Stale inventory display: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-006",
+        "title": "ADR: Stale inventory display",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "INC-006",
+        "title": "Incident: Stale inventory display",
+        "type": "incident"
+      },
+      {
+        "source_id": "MENTOR-010",
+        "title": "Mentoring 10: Stale inventory display (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "COM-006",
+        "title": "Commit series: Stale inventory display",
+        "type": "commit"
+      }
+    ],
+    "latency_seconds": 1.479,
+    "timestamp_utc": "2026-11-14T12:12:58.238135+00:00"
+  },
+  {
+    "case_id": "DEV-008",
+    "category": "historical_adaptation",
+    "system": "digital_twin",
+    "mode": "ask",
+    "question": "One partner sends a heavy burst of requests that slows other customers. How should API access be controlled?",
+    "answer": "RECOMMENDATION\nImplement per-client token-bucket limits on the public API gateway, publish explicit `Retry-After` semantics, and properly exempt health checks, while rejecting a single global request limit [ADR-008].\n\nHISTORICAL PRECEDENT\nDuring an incident where a partner integration saturated request workers and pushed regular customer requests into timeouts, request metrics showed that 68% of peak traffic came from a single API key, with client retries aligning with bursts of `429 Too Many Requests` responses [INC-008, DOC-008]. Alex Morgan rejected a global request limit because it would not protect innocent customers from a noisy partner [MENTOR-012], instead recommending per-client token-bucket limits, `Retry-After` semantics, and health check exemptions [ADR-008, PR-008].\n\nWHY IT APPLIES OR DIFFERS\nThe current scenario directly matches the historical conditions: a heavy request burst from a specific partner is degrading service for other customers. The underlying mechanism—tenant unfairness compounded by aggressive client retries hitting `429` errors—is identical to the documented incident [INC-008]. A global limit remains an anti-pattern here because it penalizes well-behaved tenants alongside the abusive one [MENTOR-012].\n\nNEXT STEPS\n1. Configure per-client token-bucket rate limiting and ensure health check paths are explicitly exempted [ADR-008].\n2. Implement standard `Retry-After` header semantics so clients can back off cleanly instead of amplifying traffic spikes [ADR-008].\n3. Run a load test simulating mixed tenant traffic to confirm that abusive clients cannot saturate workers, and add automated regression test coverage [PR-008, DOC-008].\n\nCONFIDENCE & MISSING EVIDENCE\nHIGH. Direct historical precedent exists with matching production failure modes, clear metrics (68% traffic from a single key), and a validated architectural decision [ADR-008, INC-008].",
+    "sources": [
+      {
+        "source_id": "PR-008",
+        "title": "PR review: Partner traffic spikes",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "DOC-008",
+        "title": "Partner traffic spikes: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-008",
+        "title": "ADR: Partner traffic spikes",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-012",
+        "title": "Mentoring 12: Partner traffic spikes (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "INC-008",
+        "title": "Incident: Partner traffic spikes",
+        "type": "incident"
+      }
+    ],
+    "latency_seconds": 2.128,
+    "timestamp_utc": "2026-11-14T12:13:00.372103+00:00"
+  },
+  {
+    "case_id": "DEV-008",
+    "category": "historical_adaptation",
+    "system": "baseline_rag",
+    "mode": "baseline",
+    "question": "One partner sends a heavy burst of requests that slows other customers. How should API access be controlled?",
+    "answer": "To control API access and prevent a single partner from slowing down other customers, the following approach should be implemented on the public API gateway:\n\n* **Apply per-client token-bucket limits:** Instead of a global request limit for everyone (which was considered and rejected) [ADR-008, MENTOR-012], use per-client rate limiting to isolate traffic spikes and protect regular customers from noisy partners [MENTOR-012, INC-008].\n* **Publish `Retry-After` semantics:** Provide clear guidance to clients on when they are allowed to retry after hitting rate limits [PR-008, INC-008].\n* **Exempt health checks appropriately:** Ensure critical health check paths are not restricted by these client limits [PR-008, INC-008].\n* **Validation:** Load-test mixed tenants to confirm that abusive clients cannot push regular requests into timeouts [PR-008, DOC-008, ADR-008].",
+    "sources": [
+      {
+        "source_id": "PR-008",
+        "title": "PR review: Partner traffic spikes",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "DOC-008",
+        "title": "Partner traffic spikes: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "ADR-008",
+        "title": "ADR: Partner traffic spikes",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-012",
+        "title": "Mentoring 12: Partner traffic spikes (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "INC-008",
+        "title": "Incident: Partner traffic spikes",
+        "type": "incident"
+      }
+    ],
+    "latency_seconds": 1.311,
+    "timestamp_utc": "2026-11-14T12:13:01.684450+00:00"
+  },
+  {
+    "case_id": "DEV-009",
+    "category": "historical_adaptation",
+    "system": "digital_twin",
+    "mode": "ask",
+    "question": "A checkout request is slow, but existing logs combine database and provider time into one duration. What information should be collected first?",
+    "answer": "RECOMMENDATION\nPropagate correlation IDs and add explicit spans for validation, database operations, and payment calls with safe redaction to isolate which dependency consumed the time [ADR-009, MENTOR-013].\n\nHISTORICAL PRECEDENT\nWhen faced with aggregated request durations and a lack of correlation IDs during checkout timeouts, Alex Morgan recommended avoiding verbose unstructured logging in favor of propagating correlation IDs and adding dedicated spans for validation, database operations, and payment calls while ensuring safe redaction [ADR-009, MENTOR-013].\n\nWHY IT APPLIES OR DIFFERS\nThe current situation matches the historical problem context: request durations are lumped together, obscuring whether the database or the payment provider is causing the latency [ADR-009, DOC-009, INC-009]. The engineering principle of \"observability before guessing\" applies directly, requiring structured tracing rather than broad, noisy logging [MENTOR-013].\n\nNEXT STEPS\n1. Implement correlation ID propagation across incoming requests and downstream calls [ADR-009].\n2. Add distinct spans for validation, database operations, and payment gateway interactions, ensuring sensitive data (such as card details or tokens) is safely redacted [ADR-009].\n3. Reproduce the slow request scenario in a staging environment to verify that root-cause isolation is achieved from a single trace [DOC-009, PR-009].\n\nCONFIDENCE & MISSING EVIDENCE\nHIGH. The current symptoms directly match the documented conditions and constraints from past telemetry gaps in the Orion Orders API [DOC-009, INC-009].",
+    "sources": [
+      {
+        "source_id": "MENTOR-013",
+        "title": "Mentoring 13: Unknown checkout timeouts (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "ADR-009",
+        "title": "ADR: Unknown checkout timeouts",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "DOC-009",
+        "title": "Unknown checkout timeouts: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "PR-009",
+        "title": "PR review: Unknown checkout timeouts",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "INC-009",
+        "title": "Incident: Unknown checkout timeouts",
+        "type": "incident"
+      }
+    ],
+    "latency_seconds": 12.052,
+    "timestamp_utc": "2026-11-14T12:13:13.737712+00:00"
+  },
+  {
+    "case_id": "DEV-009",
+    "category": "historical_adaptation",
+    "system": "baseline_rag",
+    "mode": "baseline",
+    "question": "A checkout request is slow, but existing logs combine database and provider time into one duration. What information should be collected first?",
+    "answer": "To isolate which dependency consumed the time when database and payment gateway timings are aggregated into a single duration, you should collect information by propagating correlation IDs and adding distinct spans for validation, database operations, and payment calls (with safe redaction) [MENTOR-013, ADR-009, INC-009].",
+    "sources": [
+      {
+        "source_id": "MENTOR-013",
+        "title": "Mentoring 13: Unknown checkout timeouts (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "ADR-009",
+        "title": "ADR: Unknown checkout timeouts",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "DOC-009",
+        "title": "Unknown checkout timeouts: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "PR-009",
+        "title": "PR review: Unknown checkout timeouts",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "INC-009",
+        "title": "Incident: Unknown checkout timeouts",
+        "type": "incident"
+      }
+    ],
+    "latency_seconds": 1.168,
+    "timestamp_utc": "2026-11-14T12:13:14.917531+00:00"
+  },
+  {
+    "case_id": "DEV-010",
+    "category": "historical_adaptation",
+    "system": "digital_twin",
+    "mode": "ask",
+    "question": "A payment provider becomes intermittently slow and application workers begin accumulating. What protections should be added?",
+    "answer": "RECOMMENDATION\nIntroduce explicit timeouts, bounded concurrency, and a circuit breaker for the payment dependency to prevent third-party slowdowns from exhausting application workers and failing unrelated operations [ADR-010, INC-010].\n\nHISTORICAL PRECEDENT\nDuring a payment gateway slowdown incident in the Orion Orders API, connection pool metrics showed payment requests waiting 20 seconds without a timeout or concurrency cap, causing application workers to back up and unrelated order reads to fail [INC-010, DOC-010]. Raising the application worker limit alone was rejected as an alternative [ADR-010]. Instead, the team introduced explicit timeouts, bounded concurrency, and a circuit breaker for the payment dependency, and encoded regression coverage in an automated test [INC-010, COM-010].\n\nWHY IT APPLIES OR DIFFERS\nThe current symptom—a slow payment provider causing application workers to accumulate—directly matches the historical conditions documented in the Orion Orders API [INC-010, DOC-010]. Because the underlying mechanics of dependency exhaustion and thread/worker pool starvation are identical, the core principle of limiting the blast radius through timeouts and circuit breaking remains applicable.\n\nNEXT STEPS\n1. Inspect connection pool metrics and worker utilization to determine current request wait times and concurrency limits [INC-010].\n2. Implement explicit timeouts, a concurrency cap, and a circuit breaker on the payment integration path [ADR-010].\n3. Fault-inject gateway latency in a staging environment to verify that unrelated read endpoints stay healthy while payment calls fail predictably [DOC-010, COM-010].\n\nCONFIDENCE & MISSING EVIDENCE\nHIGH: Direct historical evidence and matching system conditions exist for this exact failure mode within the same domain (Orion Orders API payment integration) [DOC-010, INC-010].",
+    "sources": [
+      {
+        "source_id": "INC-010",
+        "title": "Incident: Payment gateway slowdown",
+        "type": "incident"
+      },
+      {
+        "source_id": "ADR-010",
+        "title": "ADR: Payment gateway slowdown",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-014",
+        "title": "Mentoring 14: Payment gateway slowdown (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "DOC-010",
+        "title": "Payment gateway slowdown: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "COM-010",
+        "title": "Commit series: Payment gateway slowdown",
+        "type": "commit"
+      }
+    ],
+    "latency_seconds": 2.599,
+    "timestamp_utc": "2026-11-14T12:13:17.517754+00:00"
+  },
+  {
+    "case_id": "DEV-010",
+    "category": "historical_adaptation",
+    "system": "baseline_rag",
+    "mode": "baseline",
+    "question": "A payment provider becomes intermittently slow and application workers begin accumulating. What protections should be added?",
+    "answer": "Based on the provided evidence, when a payment provider becomes intermittently slow and application workers accumulate, the following protections should be added for the payment dependency:\n\n* **Explicit timeouts** [INC-010, ADR-010]\n* **Bounded concurrency** [INC-010, ADR-010]\n* **A circuit breaker** [INC-010, ADR-010]\n\nAdditionally, the team explicitly rejected the alternative of only raising the application worker limit [ADR-010, COM-010]. These changes ensure that payment requests do not tie up all application workers and prevent unrelated tasks (such as order reads) from failing [INC-010, DOC-010].",
+    "sources": [
+      {
+        "source_id": "INC-010",
+        "title": "Incident: Payment gateway slowdown",
+        "type": "incident"
+      },
+      {
+        "source_id": "ADR-010",
+        "title": "ADR: Payment gateway slowdown",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-014",
+        "title": "Mentoring 14: Payment gateway slowdown (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "DOC-010",
+        "title": "Payment gateway slowdown: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "COM-010",
+        "title": "Commit series: Payment gateway slowdown",
+        "type": "commit"
+      }
+    ],
+    "latency_seconds": 1.075,
+    "timestamp_utc": "2026-11-14T12:13:18.595496+00:00"
+  },
+  {
+    "case_id": "DEV-011",
+    "category": "historical_adaptation",
+    "system": "digital_twin",
+    "mode": "ask",
+    "question": "An API field has a new name, but some deployed clients still expect the original name. How should it evolve?",
+    "answer": "RECOMMENDATION\nRestore the original field name alongside the new field additively, and establish a defined deprecation window protected by consumer contract tests.\n\nHISTORICAL PRECEDENT\nHistorically, when facing a breaking API response change due to a field rename, the team decided to restore the old field, introduce the new field additively, and define a deprecation window with consumer contract tests [ADR-011, DOC-011, MENTOR-015, PR-011]. The core reasoning was that a field rename constitutes a breaking change even if the underlying data types remain identical [ADR-011, DOC-011, MENTOR-015, PR-011]. The trade-off accepted was an increase in temporary maintenance and documentation overhead to support overlapping fields [ADR-011, DOC-011, MENTOR-015, PR-011].\n\nWHY IT APPLIES OR DIFFERS\nThe current situation matches the historical precedent: an API field has been renamed, but deployed clients still depend on the original name. Because live clients expect the old contract, forcing an immediate update would break them. The principle of maintaining backward compatibility directly applies here.\n\nNEXT STEPS\n1. Modify the response schema to include both the old field and the new field concurrently.\n2. Implement consumer contract tests to assert backward compatibility across both current and previous supported client payloads [ADR-011, DOC-011, PR-011].\n3. Document a clear deprecation timeline for the old field to allow remaining clients to migrate safely.\n\nCONFIDENCE & MISSING EVIDENCE\nHIGH: Direct historical precedent exists for handling field renames with additive changes and contract testing under matching conditions [ADR-011, DOC-011, MENTOR-015, PR-011].",
+    "sources": [
+      {
+        "source_id": "ADR-011",
+        "title": "ADR: Breaking API response",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "DOC-011",
+        "title": "Breaking API response: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "MENTOR-015",
+        "title": "Mentoring 15: Breaking API response (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "PR-011",
+        "title": "PR review: Breaking API response",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "DOC-007",
+        "title": "Zero-downtime schema change: system notes",
+        "type": "technical_document"
+      }
+    ],
+    "latency_seconds": 1.991,
+    "timestamp_utc": "2026-11-14T12:13:20.588352+00:00"
+  },
+  {
+    "case_id": "DEV-011",
+    "category": "historical_adaptation",
+    "system": "baseline_rag",
+    "mode": "baseline",
+    "question": "An API field has a new name, but some deployed clients still expect the original name. How should it evolve?",
+    "answer": "When an API field is renamed while deployed clients still expect the original name, a field rename is treated as a breaking change even if the types otherwise stay identical [ADR-011, DOC-011, MENTOR-015, PR-011]. \n\nTo evolve the API safely:\n* **Restore the old field** and **introduce the new field additively** [ADR-011, MENTOR-015, PR-011].\n* Define a **deprecation window** backed by consumer contract tests [ADR-011, MENTOR-015, PR-011].\n* Test both current and previously supported client payloads to assert backward compatibility [ADR-011, DOC-011, PR-011].\n* Be prepared for the trade-off that supporting overlapping fields increases temporary maintenance and documentation work [ADR-011, DOC-011, MENTOR-015, PR-011].\n* If issues arise with new clients, operational recovery involves reinstating the old response shape behind a versioned serializer [ADR-011, DOC-011].",
+    "sources": [
+      {
+        "source_id": "ADR-011",
+        "title": "ADR: Breaking API response",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "DOC-011",
+        "title": "Breaking API response: system notes",
+        "type": "technical_document"
+      },
+      {
+        "source_id": "MENTOR-015",
+        "title": "Mentoring 15: Breaking API response (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "PR-011",
+        "title": "PR review: Breaking API response",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "DOC-007",
+        "title": "Zero-downtime schema change: system notes",
+        "type": "technical_document"
+      }
+    ],
+    "latency_seconds": 1.232,
+    "timestamp_utc": "2026-11-14T12:13:21.822462+00:00"
+  }
+]

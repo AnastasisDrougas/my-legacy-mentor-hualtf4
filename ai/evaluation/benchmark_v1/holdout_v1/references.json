@@ -1,0 +1,1786 @@
+{
+  "H26-001": {
+    "expected_decision": "Measure actual read and write query plans before retaining or changing indexes; assess filter order and rollback.",
+    "required_facts": [
+      "query plans",
+      "write cost",
+      "index order",
+      "rollback"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-001"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-002": {
+    "expected_decision": "Measure actual read and write query plans before retaining or changing indexes; assess filter order and rollback.",
+    "required_facts": [
+      "query plans",
+      "write cost",
+      "index order",
+      "rollback"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-001"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-003": {
+    "expected_decision": "Require client idempotency keys, transactional persistent uniqueness and safe replay of original results.",
+    "required_facts": [
+      "client key",
+      "persistent uniqueness",
+      "replay",
+      "concurrent retries"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-002"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-004": {
+    "expected_decision": "Require client idempotency keys, transactional persistent uniqueness and safe replay of original results.",
+    "required_facts": [
+      "client key",
+      "persistent uniqueness",
+      "replay",
+      "concurrent retries"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-002"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-005": {
+    "expected_decision": "Separate transactional from bulk mail; bound retries with backoff and dead-letter handling.",
+    "required_facts": [
+      "queue isolation",
+      "backoff",
+      "dead letter",
+      "fairness"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-003"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-006": {
+    "expected_decision": "Separate transactional from bulk mail; bound retries with backoff and dead-letter handling.",
+    "required_facts": [
+      "queue isolation",
+      "backoff",
+      "dead letter",
+      "fairness"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-003"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-007": {
+    "expected_decision": "Contain exposure and enforce tenant-scoped repository queries with negative authorization tests.",
+    "required_facts": [
+      "tenant ownership",
+      "query scoping",
+      "negative tests",
+      "containment"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-004"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-008": {
+    "expected_decision": "Contain exposure and enforce tenant-scoped repository queries with negative authorization tests.",
+    "required_facts": [
+      "tenant ownership",
+      "query scoping",
+      "negative tests",
+      "containment"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-004"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-009": {
+    "expected_decision": "Write order and outbox event atomically, publish asynchronously and make consumers idempotent.",
+    "required_facts": [
+      "atomic outbox",
+      "publisher",
+      "duplicate events",
+      "reconciliation"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-005"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-010": {
+    "expected_decision": "Write order and outbox event atomically, publish asynchronously and make consumers idempotent.",
+    "required_facts": [
+      "atomic outbox",
+      "publisher",
+      "duplicate events",
+      "reconciliation"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-005"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-011": {
+    "expected_decision": "Improve display cache freshness while enforcing stock availability transactionally at checkout.",
+    "required_facts": [
+      "cache invalidation",
+      "ttl",
+      "checkout recheck",
+      "oversell"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-006"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-012": {
+    "expected_decision": "Improve display cache freshness while enforcing stock availability transactionally at checkout.",
+    "required_facts": [
+      "cache invalidation",
+      "ttl",
+      "checkout recheck",
+      "oversell"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-006"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-013": {
+    "expected_decision": "Use expand-backfill-contract with mixed-version compatibility, batch backfill and delayed constraints.",
+    "required_facts": [
+      "nullable field",
+      "compatible versions",
+      "batch backfill",
+      "defer constraint"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-007"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-014": {
+    "expected_decision": "Use expand-backfill-contract with mixed-version compatibility, batch backfill and delayed constraints.",
+    "required_facts": [
+      "nullable field",
+      "compatible versions",
+      "batch backfill",
+      "defer constraint"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-007"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-015": {
+    "expected_decision": "Use per-client token bucket limits, Retry-After guidance and health-check protections.",
+    "required_facts": [
+      "per-client limit",
+      "retry-after",
+      "fairness",
+      "health checks"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-008"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-016": {
+    "expected_decision": "Use per-client token bucket limits, Retry-After guidance and health-check protections.",
+    "required_facts": [
+      "per-client limit",
+      "retry-after",
+      "fairness",
+      "health checks"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-008"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-017": {
+    "expected_decision": "Propagate correlation IDs and separate redacted spans for validation, database and payment calls.",
+    "required_facts": [
+      "correlation id",
+      "separate spans",
+      "payment tracing",
+      "redaction"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-009"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-018": {
+    "expected_decision": "Propagate correlation IDs and separate redacted spans for validation, database and payment calls.",
+    "required_facts": [
+      "correlation id",
+      "separate spans",
+      "payment tracing",
+      "redaction"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-009"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-019": {
+    "expected_decision": "Apply timeouts, bounded concurrency and circuit breaker; avoid non-idempotent retry.",
+    "required_facts": [
+      "timeouts",
+      "concurrency cap",
+      "circuit breaker",
+      "safe retry"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-010"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-020": {
+    "expected_decision": "Apply timeouts, bounded concurrency and circuit breaker; avoid non-idempotent retry.",
+    "required_facts": [
+      "timeouts",
+      "concurrency cap",
+      "circuit breaker",
+      "safe retry"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-010"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-021": {
+    "expected_decision": "Retain old response fields, add new fields, define deprecation window and consumer contract tests.",
+    "required_facts": [
+      "old field",
+      "additive response",
+      "deprecation",
+      "contract tests"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-011"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-022": {
+    "expected_decision": "Retain old response fields, add new fields, define deprecation window and consumer contract tests.",
+    "required_facts": [
+      "old field",
+      "additive response",
+      "deprecation",
+      "contract tests"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-011"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-023": {
+    "expected_decision": "Stop the affected canary, inspect p95 and cohort traces, resume gradually with measured guardrails.",
+    "required_facts": [
+      "disable canary",
+      "p95",
+      "cohort telemetry",
+      "gradual reenable"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-012"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-024": {
+    "expected_decision": "Stop the affected canary, inspect p95 and cohort traces, resume gradually with measured guardrails.",
+    "required_facts": [
+      "disable canary",
+      "p95",
+      "cohort telemetry",
+      "gradual reenable"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-012"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-025": {
+    "expected_decision": "Require client idempotency keys, transactional persistent uniqueness and safe replay of original results.",
+    "required_facts": [
+      "client key",
+      "persistent uniqueness",
+      "replay",
+      "concurrent retries"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-002"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-026": {
+    "expected_decision": "Contain exposure and enforce tenant-scoped repository queries with negative authorization tests.",
+    "required_facts": [
+      "tenant ownership",
+      "query scoping",
+      "negative tests",
+      "containment"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-004"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-027": {
+    "expected_decision": "Write order and outbox event atomically, publish asynchronously and make consumers idempotent.",
+    "required_facts": [
+      "atomic outbox",
+      "publisher",
+      "duplicate events",
+      "reconciliation"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-005"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-028": {
+    "expected_decision": "Use expand-backfill-contract with mixed-version compatibility, batch backfill and delayed constraints.",
+    "required_facts": [
+      "nullable field",
+      "compatible versions",
+      "batch backfill",
+      "defer constraint"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-007"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-029": {
+    "expected_decision": "Apply timeouts, bounded concurrency and circuit breaker; avoid non-idempotent retry.",
+    "required_facts": [
+      "timeouts",
+      "concurrency cap",
+      "circuit breaker",
+      "safe retry"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-010"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-030": {
+    "expected_decision": "Stop the affected canary, inspect p95 and cohort traces, resume gradually with measured guardrails.",
+    "required_facts": [
+      "disable canary",
+      "p95",
+      "cohort telemetry",
+      "gradual reenable"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-012"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-031": {
+    "expected_decision": "Measure actual read and write query plans before retaining or changing indexes; assess filter order and rollback.",
+    "required_facts": [
+      "query plans",
+      "write cost",
+      "index order",
+      "rollback"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-001"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-032": {
+    "expected_decision": "Measure actual read and write query plans before retaining or changing indexes; assess filter order and rollback.",
+    "required_facts": [
+      "query plans",
+      "write cost",
+      "index order",
+      "rollback"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-001"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-033": {
+    "expected_decision": "Require client idempotency keys, transactional persistent uniqueness and safe replay of original results.",
+    "required_facts": [
+      "client key",
+      "persistent uniqueness",
+      "replay",
+      "concurrent retries"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-002"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-034": {
+    "expected_decision": "Require client idempotency keys, transactional persistent uniqueness and safe replay of original results.",
+    "required_facts": [
+      "client key",
+      "persistent uniqueness",
+      "replay",
+      "concurrent retries"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-002"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-035": {
+    "expected_decision": "Separate transactional from bulk mail; bound retries with backoff and dead-letter handling.",
+    "required_facts": [
+      "queue isolation",
+      "backoff",
+      "dead letter",
+      "fairness"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-003"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-036": {
+    "expected_decision": "Separate transactional from bulk mail; bound retries with backoff and dead-letter handling.",
+    "required_facts": [
+      "queue isolation",
+      "backoff",
+      "dead letter",
+      "fairness"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-003"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-037": {
+    "expected_decision": "Contain exposure and enforce tenant-scoped repository queries with negative authorization tests.",
+    "required_facts": [
+      "tenant ownership",
+      "query scoping",
+      "negative tests",
+      "containment"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-004"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-038": {
+    "expected_decision": "Contain exposure and enforce tenant-scoped repository queries with negative authorization tests.",
+    "required_facts": [
+      "tenant ownership",
+      "query scoping",
+      "negative tests",
+      "containment"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-004"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-039": {
+    "expected_decision": "Write order and outbox event atomically, publish asynchronously and make consumers idempotent.",
+    "required_facts": [
+      "atomic outbox",
+      "publisher",
+      "duplicate events",
+      "reconciliation"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-005"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-040": {
+    "expected_decision": "Write order and outbox event atomically, publish asynchronously and make consumers idempotent.",
+    "required_facts": [
+      "atomic outbox",
+      "publisher",
+      "duplicate events",
+      "reconciliation"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-005"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-041": {
+    "expected_decision": "Improve display cache freshness while enforcing stock availability transactionally at checkout.",
+    "required_facts": [
+      "cache invalidation",
+      "ttl",
+      "checkout recheck",
+      "oversell"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-006"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-042": {
+    "expected_decision": "Improve display cache freshness while enforcing stock availability transactionally at checkout.",
+    "required_facts": [
+      "cache invalidation",
+      "ttl",
+      "checkout recheck",
+      "oversell"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-006"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-043": {
+    "expected_decision": "Use expand-backfill-contract with mixed-version compatibility, batch backfill and delayed constraints.",
+    "required_facts": [
+      "nullable field",
+      "compatible versions",
+      "batch backfill",
+      "defer constraint"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-007"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-044": {
+    "expected_decision": "Use expand-backfill-contract with mixed-version compatibility, batch backfill and delayed constraints.",
+    "required_facts": [
+      "nullable field",
+      "compatible versions",
+      "batch backfill",
+      "defer constraint"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-007"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-045": {
+    "expected_decision": "Use per-client token bucket limits, Retry-After guidance and health-check protections.",
+    "required_facts": [
+      "per-client limit",
+      "retry-after",
+      "fairness",
+      "health checks"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-008"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-046": {
+    "expected_decision": "Use per-client token bucket limits, Retry-After guidance and health-check protections.",
+    "required_facts": [
+      "per-client limit",
+      "retry-after",
+      "fairness",
+      "health checks"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-008"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-047": {
+    "expected_decision": "Propagate correlation IDs and separate redacted spans for validation, database and payment calls.",
+    "required_facts": [
+      "correlation id",
+      "separate spans",
+      "payment tracing",
+      "redaction"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-009"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-048": {
+    "expected_decision": "Propagate correlation IDs and separate redacted spans for validation, database and payment calls.",
+    "required_facts": [
+      "correlation id",
+      "separate spans",
+      "payment tracing",
+      "redaction"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-009"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-049": {
+    "expected_decision": "Apply timeouts, bounded concurrency and circuit breaker; avoid non-idempotent retry.",
+    "required_facts": [
+      "timeouts",
+      "concurrency cap",
+      "circuit breaker",
+      "safe retry"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-010"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-050": {
+    "expected_decision": "Apply timeouts, bounded concurrency and circuit breaker; avoid non-idempotent retry.",
+    "required_facts": [
+      "timeouts",
+      "concurrency cap",
+      "circuit breaker",
+      "safe retry"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-010"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-051": {
+    "expected_decision": "Retain old response fields, add new fields, define deprecation window and consumer contract tests.",
+    "required_facts": [
+      "old field",
+      "additive response",
+      "deprecation",
+      "contract tests"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-011"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-052": {
+    "expected_decision": "Retain old response fields, add new fields, define deprecation window and consumer contract tests.",
+    "required_facts": [
+      "old field",
+      "additive response",
+      "deprecation",
+      "contract tests"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-011"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-053": {
+    "expected_decision": "Stop the affected canary, inspect p95 and cohort traces, resume gradually with measured guardrails.",
+    "required_facts": [
+      "disable canary",
+      "p95",
+      "cohort telemetry",
+      "gradual reenable"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-012"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-054": {
+    "expected_decision": "Stop the affected canary, inspect p95 and cohort traces, resume gradually with measured guardrails.",
+    "required_facts": [
+      "disable canary",
+      "p95",
+      "cohort telemetry",
+      "gradual reenable"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-012"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-055": {
+    "expected_decision": "Measure actual read and write query plans before retaining or changing indexes; assess filter order and rollback.",
+    "required_facts": [
+      "query plans",
+      "write cost",
+      "index order",
+      "rollback"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-001"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-056": {
+    "expected_decision": "Require client idempotency keys, transactional persistent uniqueness and safe replay of original results.",
+    "required_facts": [
+      "client key",
+      "persistent uniqueness",
+      "replay",
+      "concurrent retries"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-002"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-057": {
+    "expected_decision": "Contain exposure and enforce tenant-scoped repository queries with negative authorization tests.",
+    "required_facts": [
+      "tenant ownership",
+      "query scoping",
+      "negative tests",
+      "containment"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-004"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-058": {
+    "expected_decision": "Improve display cache freshness while enforcing stock availability transactionally at checkout.",
+    "required_facts": [
+      "cache invalidation",
+      "ttl",
+      "checkout recheck",
+      "oversell"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-006"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-059": {
+    "expected_decision": "Use expand-backfill-contract with mixed-version compatibility, batch backfill and delayed constraints.",
+    "required_facts": [
+      "nullable field",
+      "compatible versions",
+      "batch backfill",
+      "defer constraint"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-007"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-060": {
+    "expected_decision": "Stop the affected canary, inspect p95 and cohort traces, resume gradually with measured guardrails.",
+    "required_facts": [
+      "disable canary",
+      "p95",
+      "cohort telemetry",
+      "gradual reenable"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-012"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-061": {
+    "expected_decision": "Require client idempotency keys, transactional persistent uniqueness and safe replay of original results. AND Apply timeouts, bounded concurrency and circuit breaker; avoid non-idempotent retry.",
+    "required_facts": [
+      "client key",
+      "persistent uniqueness",
+      "replay",
+      "concurrent retries",
+      "timeouts",
+      "concurrency cap",
+      "circuit breaker",
+      "safe retry"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-002",
+      "ADR-010"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-062": {
+    "expected_decision": "Contain exposure and enforce tenant-scoped repository queries with negative authorization tests. AND Use per-client token bucket limits, Retry-After guidance and health-check protections.",
+    "required_facts": [
+      "tenant ownership",
+      "query scoping",
+      "negative tests",
+      "containment",
+      "per-client limit",
+      "retry-after",
+      "fairness",
+      "health checks"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-004",
+      "ADR-008"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-063": {
+    "expected_decision": "Improve display cache freshness while enforcing stock availability transactionally at checkout. AND Require client idempotency keys, transactional persistent uniqueness and safe replay of original results.",
+    "required_facts": [
+      "cache invalidation",
+      "ttl",
+      "checkout recheck",
+      "oversell",
+      "client key",
+      "persistent uniqueness",
+      "replay",
+      "concurrent retries"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-006",
+      "ADR-002"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-064": {
+    "expected_decision": "Use expand-backfill-contract with mixed-version compatibility, batch backfill and delayed constraints. AND Retain old response fields, add new fields, define deprecation window and consumer contract tests.",
+    "required_facts": [
+      "nullable field",
+      "compatible versions",
+      "batch backfill",
+      "defer constraint",
+      "old field",
+      "additive response",
+      "deprecation",
+      "contract tests"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-007",
+      "ADR-011"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-065": {
+    "expected_decision": "Write order and outbox event atomically, publish asynchronously and make consumers idempotent. AND Require client idempotency keys, transactional persistent uniqueness and safe replay of original results.",
+    "required_facts": [
+      "atomic outbox",
+      "publisher",
+      "duplicate events",
+      "reconciliation",
+      "client key",
+      "persistent uniqueness",
+      "replay",
+      "concurrent retries"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-005",
+      "ADR-002"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-066": {
+    "expected_decision": "Propagate correlation IDs and separate redacted spans for validation, database and payment calls. AND Apply timeouts, bounded concurrency and circuit breaker; avoid non-idempotent retry.",
+    "required_facts": [
+      "correlation id",
+      "separate spans",
+      "payment tracing",
+      "redaction",
+      "timeouts",
+      "concurrency cap",
+      "circuit breaker",
+      "safe retry"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-009",
+      "ADR-010"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-067": {
+    "expected_decision": "Stop the affected canary, inspect p95 and cohort traces, resume gradually with measured guardrails. AND Propagate correlation IDs and separate redacted spans for validation, database and payment calls.",
+    "required_facts": [
+      "disable canary",
+      "p95",
+      "cohort telemetry",
+      "gradual reenable",
+      "correlation id",
+      "separate spans",
+      "payment tracing",
+      "redaction"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-012",
+      "ADR-009"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-068": {
+    "expected_decision": "Separate transactional from bulk mail; bound retries with backoff and dead-letter handling. AND Use per-client token bucket limits, Retry-After guidance and health-check protections.",
+    "required_facts": [
+      "queue isolation",
+      "backoff",
+      "dead letter",
+      "fairness",
+      "per-client limit",
+      "retry-after",
+      "health checks"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-003",
+      "ADR-008"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-069": {
+    "expected_decision": "Measure actual read and write query plans before retaining or changing indexes; assess filter order and rollback. AND Use expand-backfill-contract with mixed-version compatibility, batch backfill and delayed constraints.",
+    "required_facts": [
+      "query plans",
+      "write cost",
+      "index order",
+      "rollback",
+      "nullable field",
+      "compatible versions",
+      "batch backfill",
+      "defer constraint"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-001",
+      "ADR-007"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-070": {
+    "expected_decision": "Contain exposure and enforce tenant-scoped repository queries with negative authorization tests. AND Retain old response fields, add new fields, define deprecation window and consumer contract tests.",
+    "required_facts": [
+      "tenant ownership",
+      "query scoping",
+      "negative tests",
+      "containment",
+      "old field",
+      "additive response",
+      "deprecation",
+      "contract tests"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-004",
+      "ADR-011"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-071": {
+    "expected_decision": "Write order and outbox event atomically, publish asynchronously and make consumers idempotent. AND Apply timeouts, bounded concurrency and circuit breaker; avoid non-idempotent retry.",
+    "required_facts": [
+      "atomic outbox",
+      "publisher",
+      "duplicate events",
+      "reconciliation",
+      "timeouts",
+      "concurrency cap",
+      "circuit breaker",
+      "safe retry"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-005",
+      "ADR-010"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-072": {
+    "expected_decision": "Improve display cache freshness while enforcing stock availability transactionally at checkout. AND Stop the affected canary, inspect p95 and cohort traces, resume gradually with measured guardrails.",
+    "required_facts": [
+      "cache invalidation",
+      "ttl",
+      "checkout recheck",
+      "oversell",
+      "disable canary",
+      "p95",
+      "cohort telemetry",
+      "gradual reenable"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-006",
+      "ADR-012"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-073": {
+    "expected_decision": "Use per-client token bucket limits, Retry-After guidance and health-check protections. AND Apply timeouts, bounded concurrency and circuit breaker; avoid non-idempotent retry.",
+    "required_facts": [
+      "per-client limit",
+      "retry-after",
+      "fairness",
+      "health checks",
+      "timeouts",
+      "concurrency cap",
+      "circuit breaker",
+      "safe retry"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-008",
+      "ADR-010"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-074": {
+    "expected_decision": "Use expand-backfill-contract with mixed-version compatibility, batch backfill and delayed constraints. AND Write order and outbox event atomically, publish asynchronously and make consumers idempotent.",
+    "required_facts": [
+      "nullable field",
+      "compatible versions",
+      "batch backfill",
+      "defer constraint",
+      "atomic outbox",
+      "publisher",
+      "duplicate events",
+      "reconciliation"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-007",
+      "ADR-005"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-075": {
+    "expected_decision": "Retain old response fields, add new fields, define deprecation window and consumer contract tests. AND Stop the affected canary, inspect p95 and cohort traces, resume gradually with measured guardrails.",
+    "required_facts": [
+      "old field",
+      "additive response",
+      "deprecation",
+      "contract tests",
+      "disable canary",
+      "p95",
+      "cohort telemetry",
+      "gradual reenable"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-011",
+      "ADR-012"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-076": {
+    "expected_decision": "Measure actual read and write query plans before retaining or changing indexes; assess filter order and rollback. AND Improve display cache freshness while enforcing stock availability transactionally at checkout.",
+    "required_facts": [
+      "query plans",
+      "write cost",
+      "index order",
+      "rollback",
+      "cache invalidation",
+      "ttl",
+      "checkout recheck",
+      "oversell"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-001",
+      "ADR-006"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-077": {
+    "expected_decision": "Require client idempotency keys, transactional persistent uniqueness and safe replay of original results. AND Propagate correlation IDs and separate redacted spans for validation, database and payment calls.",
+    "required_facts": [
+      "client key",
+      "persistent uniqueness",
+      "replay",
+      "concurrent retries",
+      "correlation id",
+      "separate spans",
+      "payment tracing",
+      "redaction"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-002",
+      "ADR-009"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-078": {
+    "expected_decision": "Separate transactional from bulk mail; bound retries with backoff and dead-letter handling. AND Write order and outbox event atomically, publish asynchronously and make consumers idempotent.",
+    "required_facts": [
+      "queue isolation",
+      "backoff",
+      "dead letter",
+      "fairness",
+      "atomic outbox",
+      "publisher",
+      "duplicate events",
+      "reconciliation"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-003",
+      "ADR-005"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-079": {
+    "expected_decision": "Contain exposure and enforce tenant-scoped repository queries with negative authorization tests. AND Stop the affected canary, inspect p95 and cohort traces, resume gradually with measured guardrails.",
+    "required_facts": [
+      "tenant ownership",
+      "query scoping",
+      "negative tests",
+      "containment",
+      "disable canary",
+      "p95",
+      "cohort telemetry",
+      "gradual reenable"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-004",
+      "ADR-012"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-080": {
+    "expected_decision": "Improve display cache freshness while enforcing stock availability transactionally at checkout. AND Apply timeouts, bounded concurrency and circuit breaker; avoid non-idempotent retry.",
+    "required_facts": [
+      "cache invalidation",
+      "ttl",
+      "checkout recheck",
+      "oversell",
+      "timeouts",
+      "concurrency cap",
+      "circuit breaker",
+      "safe retry"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-006",
+      "ADR-010"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-081": {
+    "expected_decision": "Use expand-backfill-contract with mixed-version compatibility, batch backfill and delayed constraints. AND Propagate correlation IDs and separate redacted spans for validation, database and payment calls.",
+    "required_facts": [
+      "nullable field",
+      "compatible versions",
+      "batch backfill",
+      "defer constraint",
+      "correlation id",
+      "separate spans",
+      "payment tracing",
+      "redaction"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-007",
+      "ADR-009"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-082": {
+    "expected_decision": "Use per-client token bucket limits, Retry-After guidance and health-check protections. AND Contain exposure and enforce tenant-scoped repository queries with negative authorization tests.",
+    "required_facts": [
+      "per-client limit",
+      "retry-after",
+      "fairness",
+      "health checks",
+      "tenant ownership",
+      "query scoping",
+      "negative tests",
+      "containment"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-008",
+      "ADR-004"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-083": {
+    "expected_decision": "Measure actual read and write query plans before retaining or changing indexes; assess filter order and rollback. AND Apply timeouts, bounded concurrency and circuit breaker; avoid non-idempotent retry.",
+    "required_facts": [
+      "query plans",
+      "write cost",
+      "index order",
+      "rollback",
+      "timeouts",
+      "concurrency cap",
+      "circuit breaker",
+      "safe retry"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-001",
+      "ADR-010"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-084": {
+    "expected_decision": "Require client idempotency keys, transactional persistent uniqueness and safe replay of original results. AND Write order and outbox event atomically, publish asynchronously and make consumers idempotent.",
+    "required_facts": [
+      "client key",
+      "persistent uniqueness",
+      "replay",
+      "concurrent retries",
+      "atomic outbox",
+      "publisher",
+      "duplicate events",
+      "reconciliation"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-002",
+      "ADR-005"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-085": {
+    "expected_decision": "Stop the affected canary, inspect p95 and cohort traces, resume gradually with measured guardrails. AND Retain old response fields, add new fields, define deprecation window and consumer contract tests.",
+    "required_facts": [
+      "disable canary",
+      "p95",
+      "cohort telemetry",
+      "gradual reenable",
+      "old field",
+      "additive response",
+      "deprecation",
+      "contract tests"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-012",
+      "ADR-011"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": "Two-domain scenario; relative priority depends on evidence"
+  },
+  "H26-086": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-087": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-088": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-089": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-090": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-091": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-092": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-093": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-094": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-095": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-096": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-097": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-098": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-099": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-100": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-101": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-102": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-103": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-104": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-105": {
+    "expected_decision": "Clearly state the requested fact is not available in the provided synthetic evidence. Do not invent private or live data.",
+    "required_facts": [],
+    "expected_abstention": true,
+    "historical_sources": [],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-106": {
+    "expected_decision": "Reject the unsupported or unsafe premise; Measure actual read and write query plans before retaining or changing indexes; assess filter order and rollback.",
+    "required_facts": [
+      "query plans",
+      "write cost",
+      "index order",
+      "rollback"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-001"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-107": {
+    "expected_decision": "Reject the unsupported or unsafe premise; Contain exposure and enforce tenant-scoped repository queries with negative authorization tests.",
+    "required_facts": [
+      "tenant ownership",
+      "query scoping",
+      "negative tests",
+      "containment"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-004"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-108": {
+    "expected_decision": "Reject the unsupported or unsafe premise; Require client idempotency keys, transactional persistent uniqueness and safe replay of original results.",
+    "required_facts": [
+      "client key",
+      "persistent uniqueness",
+      "replay",
+      "concurrent retries"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-002"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-109": {
+    "expected_decision": "Reject the unsupported or unsafe premise; Use expand-backfill-contract with mixed-version compatibility, batch backfill and delayed constraints.",
+    "required_facts": [
+      "nullable field",
+      "compatible versions",
+      "batch backfill",
+      "defer constraint"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-007"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-110": {
+    "expected_decision": "Reject the unsupported or unsafe premise; Separate transactional from bulk mail; bound retries with backoff and dead-letter handling.",
+    "required_facts": [
+      "queue isolation",
+      "backoff",
+      "dead letter",
+      "fairness"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-003"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-111": {
+    "expected_decision": "Reject the unsupported or unsafe premise; Write order and outbox event atomically, publish asynchronously and make consumers idempotent.",
+    "required_facts": [
+      "atomic outbox",
+      "publisher",
+      "duplicate events",
+      "reconciliation"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-005"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-112": {
+    "expected_decision": "Reject the unsupported or unsafe premise; Improve display cache freshness while enforcing stock availability transactionally at checkout.",
+    "required_facts": [
+      "cache invalidation",
+      "ttl",
+      "checkout recheck",
+      "oversell"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-006"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-113": {
+    "expected_decision": "Reject the unsupported or unsafe premise; Use per-client token bucket limits, Retry-After guidance and health-check protections.",
+    "required_facts": [
+      "per-client limit",
+      "retry-after",
+      "fairness",
+      "health checks"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-008"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-114": {
+    "expected_decision": "Reject the unsupported or unsafe premise; Propagate correlation IDs and separate redacted spans for validation, database and payment calls.",
+    "required_facts": [
+      "correlation id",
+      "separate spans",
+      "payment tracing",
+      "redaction"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-009"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-115": {
+    "expected_decision": "Reject the unsupported or unsafe premise; Apply timeouts, bounded concurrency and circuit breaker; avoid non-idempotent retry.",
+    "required_facts": [
+      "timeouts",
+      "concurrency cap",
+      "circuit breaker",
+      "safe retry"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-010"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-116": {
+    "expected_decision": "Reject the unsupported or unsafe premise; Stop the affected canary, inspect p95 and cohort traces, resume gradually with measured guardrails.",
+    "required_facts": [
+      "disable canary",
+      "p95",
+      "cohort telemetry",
+      "gradual reenable"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-012"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-117": {
+    "expected_decision": "Reject the unsupported or unsafe premise; Retain old response fields, add new fields, define deprecation window and consumer contract tests.",
+    "required_facts": [
+      "old field",
+      "additive response",
+      "deprecation",
+      "contract tests"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-011"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-118": {
+    "expected_decision": "Reject the unsupported or unsafe premise; Apply timeouts, bounded concurrency and circuit breaker; avoid non-idempotent retry.",
+    "required_facts": [
+      "timeouts",
+      "concurrency cap",
+      "circuit breaker",
+      "safe retry"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-010"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-119": {
+    "expected_decision": "Reject the unsupported or unsafe premise; Contain exposure and enforce tenant-scoped repository queries with negative authorization tests.",
+    "required_facts": [
+      "tenant ownership",
+      "query scoping",
+      "negative tests",
+      "containment"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-004"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  },
+  "H26-120": {
+    "expected_decision": "Reject the unsupported or unsafe premise; Use expand-backfill-contract with mixed-version compatibility, batch backfill and delayed constraints.",
+    "required_facts": [
+      "nullable field",
+      "compatible versions",
+      "batch backfill",
+      "defer constraint"
+    ],
+    "expected_abstention": false,
+    "historical_sources": [
+      "ADR-007"
+    ],
+    "review_status": "pending_manual_review",
+    "notes": ""
+  }
+}

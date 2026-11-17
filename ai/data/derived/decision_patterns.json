@@ -1,0 +1,320 @@
+{
+  "senior_id": "senior_001",
+  "extraction_method": "tag_grouping_v1",
+  "source_record_count": 72,
+  "pattern_count": 12,
+  "patterns": [
+    {
+      "pattern_id": "backward_compatibility",
+      "senior_id": "senior_001",
+      "principle": "backward compatibility",
+      "observed_decisions": [
+        {
+          "source_id": "ADR-011",
+          "context": "The team must make an explicit architectural choice affecting the orders response contract and record its constraints.",
+          "decision": "Restore the old field, introduce the new field additively, and define a deprecation window with consumer contract tests.",
+          "reasoning": "The recommendation follows evidence and stated production constraints rather than a universal rule. A field rename is a breaking change even if types otherwise stay identical.",
+          "trade_offs": [
+            "Supporting overlapping fields increases temporary maintenance and documentation work."
+          ]
+        }
+      ],
+      "evidence_ids": [
+        "ADR-011",
+        "DOC-011",
+        "MENTOR-015",
+        "PR-011"
+      ],
+      "evidence_count": 4,
+      "scenario_count": 1
+    },
+    {
+      "pattern_id": "controlled_rollouts",
+      "senior_id": "senior_001",
+      "principle": "controlled rollouts",
+      "observed_decisions": [
+        {
+          "source_id": "ADR-012",
+          "context": "The team must make an explicit architectural choice affecting the recommendation service and record its constraints.",
+          "decision": "Disable the canary, inspect high-latency traces, and resume gradually only with measurable guardrails.",
+          "reasoning": "The recommendation follows evidence and stated production constraints rather than a universal rule. Canary groups must be comparable and observability must include the flag cohort.",
+          "trade_offs": [
+            "Feature flags create cleanup work and can complicate test matrices."
+          ]
+        }
+      ],
+      "evidence_ids": [
+        "ADR-012",
+        "DOC-012",
+        "MENTOR-016",
+        "PR-012"
+      ],
+      "evidence_count": 4,
+      "scenario_count": 1
+    },
+    {
+      "pattern_id": "correctness_over_speed",
+      "senior_id": "senior_001",
+      "principle": "correctness over speed",
+      "observed_decisions": [
+        {
+          "source_id": "ADR-006",
+          "context": "The team must make an explicit architectural choice affecting the inventory cache and record its constraints.",
+          "decision": "Shorten the display cache TTL, invalidate on stock updates, and recheck stock transactionally at checkout.",
+          "reasoning": "The recommendation follows evidence and stated production constraints rather than a universal rule. A short TTL does not make a stale stock check safe for payment.",
+          "trade_offs": [
+            "More invalidations increase cache churn; rechecks add latency to checkout."
+          ]
+        }
+      ],
+      "evidence_ids": [
+        "ADR-006",
+        "COM-006",
+        "DOC-006",
+        "INC-006",
+        "MENTOR-010",
+        "PR-006"
+      ],
+      "evidence_count": 6,
+      "scenario_count": 1
+    },
+    {
+      "pattern_id": "fair_isolation",
+      "senior_id": "senior_001",
+      "principle": "fair isolation",
+      "observed_decisions": [
+        {
+          "source_id": "ADR-008",
+          "context": "The team must make an explicit architectural choice affecting the public API gateway and record its constraints.",
+          "decision": "Apply per-client token-bucket limits, publish Retry-After semantics, and exempt health checks appropriately.",
+          "reasoning": "The recommendation follows evidence and stated production constraints rather than a universal rule. Poorly configured retry behavior can amplify overload.",
+          "trade_offs": [
+            "Per-client limits need fair quotas and careful treatment of legitimate bursts."
+          ]
+        }
+      ],
+      "evidence_ids": [
+        "ADR-008",
+        "COM-008",
+        "DOC-008",
+        "INC-008",
+        "MENTOR-012",
+        "PR-008"
+      ],
+      "evidence_count": 6,
+      "scenario_count": 1
+    },
+    {
+      "pattern_id": "limit_blast_radius",
+      "senior_id": "senior_001",
+      "principle": "limit blast radius",
+      "observed_decisions": [
+        {
+          "source_id": "ADR-010",
+          "context": "The team must make an explicit architectural choice affecting the payment integration and record its constraints.",
+          "decision": "Introduce explicit timeouts, bounded concurrency and a circuit breaker for the payment dependency.",
+          "reasoning": "The recommendation follows evidence and stated production constraints rather than a universal rule. Do not retry non-idempotent payments blindly.",
+          "trade_offs": [
+            "Aggressive timeouts can interrupt slow but recoverable payments; thresholds need measurements."
+          ]
+        }
+      ],
+      "evidence_ids": [
+        "ADR-010",
+        "COM-010",
+        "DOC-010",
+        "INC-010",
+        "MENTOR-014",
+        "PR-010"
+      ],
+      "evidence_count": 6,
+      "scenario_count": 1
+    },
+    {
+      "pattern_id": "measure_before_migrating",
+      "senior_id": "senior_001",
+      "principle": "measure before migrating",
+      "observed_decisions": [
+        {
+          "source_id": "ADR-001",
+          "context": "The team must make an explicit architectural choice affecting the orders database and record its constraints.",
+          "decision": "Add a composite index on (customer_id, created_at), remove the SELECT * projection, and measure the query before considering a database migration.",
+          "reasoning": "The recommendation follows evidence and stated production constraints rather than a universal rule. The index column order must match the filter and sorting pattern.",
+          "trade_offs": [
+            "The index increases write cost and requires verification against realistic data skew."
+          ]
+        }
+      ],
+      "evidence_ids": [
+        "ADR-001",
+        "COM-001",
+        "DOC-001",
+        "INC-001",
+        "MENTOR-001",
+        "MENTOR-002",
+        "PR-001"
+      ],
+      "evidence_count": 7,
+      "scenario_count": 1
+    },
+    {
+      "pattern_id": "observability_before_guessing",
+      "senior_id": "senior_001",
+      "principle": "observability before guessing",
+      "observed_decisions": [
+        {
+          "source_id": "ADR-009",
+          "context": "The team must make an explicit architectural choice affecting the checkout tracing and record its constraints.",
+          "decision": "Propagate correlation IDs and add spans for validation, database operations and payment calls with safe redaction.",
+          "reasoning": "The recommendation follows evidence and stated production constraints rather than a universal rule. Never put card details or tokens in trace attributes.",
+          "trade_offs": [
+            "Instrumentation adds overhead and demands care not to expose payment details."
+          ]
+        }
+      ],
+      "evidence_ids": [
+        "ADR-009",
+        "COM-009",
+        "DOC-009",
+        "INC-009",
+        "MENTOR-013",
+        "PR-009"
+      ],
+      "evidence_count": 6,
+      "scenario_count": 1
+    },
+    {
+      "pattern_id": "protect_critical_paths",
+      "senior_id": "senior_001",
+      "principle": "protect critical paths",
+      "observed_decisions": [
+        {
+          "source_id": "ADR-003",
+          "context": "The team must make an explicit architectural choice affecting the notification worker and record its constraints.",
+          "decision": "Separate transactional messages from bulk email workloads, cap retries with exponential backoff, and add dead-letter handling.",
+          "reasoning": "The recommendation follows evidence and stated production constraints rather than a universal rule. Unlimited retries can starve fresh traffic.",
+          "trade_offs": [
+            "Separate queues increase operational configuration and require careful fair-share limits."
+          ]
+        }
+      ],
+      "evidence_ids": [
+        "ADR-003",
+        "COM-003",
+        "DOC-003",
+        "INC-003",
+        "MENTOR-005",
+        "MENTOR-006",
+        "PR-003"
+      ],
+      "evidence_count": 7,
+      "scenario_count": 1
+    },
+    {
+      "pattern_id": "reliable_side_effects",
+      "senior_id": "senior_001",
+      "principle": "reliable side effects",
+      "observed_decisions": [
+        {
+          "source_id": "ADR-005",
+          "context": "The team must make an explicit architectural choice affecting the order event publisher and record its constraints.",
+          "decision": "Use a transactional outbox table, publish asynchronously, and make consumers idempotent.",
+          "reasoning": "The recommendation follows evidence and stated production constraints rather than a universal rule. At-least-once delivery requires consumers to handle duplicates.",
+          "trade_offs": [
+            "The outbox introduces cleanup, monitoring and a small delivery delay."
+          ]
+        }
+      ],
+      "evidence_ids": [
+        "ADR-005",
+        "COM-005",
+        "DOC-005",
+        "INC-005",
+        "MENTOR-009",
+        "PR-005"
+      ],
+      "evidence_count": 6,
+      "scenario_count": 1
+    },
+    {
+      "pattern_id": "reversible_changes",
+      "senior_id": "senior_001",
+      "principle": "reversible changes",
+      "observed_decisions": [
+        {
+          "source_id": "ADR-007",
+          "context": "The team must make an explicit architectural choice affecting the order schema and record its constraints.",
+          "decision": "Use expand-backfill-contract: add nullable column, deploy dual-compatible code, backfill in batches, then enforce constraint.",
+          "reasoning": "The recommendation follows evidence and stated production constraints rather than a universal rule. Schema rollback is not always reversible once data is transformed.",
+          "trade_offs": [
+            "The staged sequence takes additional releases and requires tracking intermediate states."
+          ]
+        }
+      ],
+      "evidence_ids": [
+        "ADR-007",
+        "COM-007",
+        "DOC-007",
+        "INC-007",
+        "MENTOR-011",
+        "PR-007"
+      ],
+      "evidence_count": 6,
+      "scenario_count": 1
+    },
+    {
+      "pattern_id": "safe_retries",
+      "senior_id": "senior_001",
+      "principle": "safe retries",
+      "observed_decisions": [
+        {
+          "source_id": "ADR-002",
+          "context": "The team must make an explicit architectural choice affecting the checkout API and record its constraints.",
+          "decision": "Require a client-provided idempotency key, enforce uniqueness per customer in storage, and return the original result on safe retries.",
+          "reasoning": "The recommendation follows evidence and stated production constraints rather than a universal rule. A cache-only key is insufficient when separate workers race.",
+          "trade_offs": [
+            "Keys need retention and collision handling; the transactional uniqueness rule adds a database dependency."
+          ]
+        }
+      ],
+      "evidence_ids": [
+        "ADR-002",
+        "COM-002",
+        "DOC-002",
+        "INC-002",
+        "MENTOR-003",
+        "MENTOR-004",
+        "PR-002"
+      ],
+      "evidence_count": 7,
+      "scenario_count": 1
+    },
+    {
+      "pattern_id": "security_first",
+      "senior_id": "senior_001",
+      "principle": "security first",
+      "observed_decisions": [
+        {
+          "source_id": "ADR-004",
+          "context": "The team must make an explicit architectural choice affecting the order authorization and record its constraints.",
+          "decision": "Apply tenant scoping in repository queries and add negative authorization tests at the API boundary.",
+          "reasoning": "The recommendation follows evidence and stated production constraints rather than a universal rule. Never treat authentication as proof of resource ownership.",
+          "trade_offs": [
+            "Tenant scoping must be audited throughout read and export paths."
+          ]
+        }
+      ],
+      "evidence_ids": [
+        "ADR-004",
+        "COM-004",
+        "DOC-004",
+        "INC-004",
+        "MENTOR-007",
+        "MENTOR-008",
+        "PR-004"
+      ],
+      "evidence_count": 7,
+      "scenario_count": 1
+    }
+  ]
+}
