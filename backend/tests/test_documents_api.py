@@ -1,7 +1,7 @@
 
 import pytest
 from fastapi.testclient import TestClient
-
+from app.services import ingestion_service
 from app import database
 from app.main import app
 from app.services import document_service
@@ -23,7 +23,14 @@ def temporary_storage(tmp_path, monkeypatch):
         "get_upload_directory",
         lambda: tmp_path / "uploads",
     )
+
+    monkeypatch.setattr(
+    ingestion_service,
+    "process_document",
+    lambda document_id: None,
+    )
     database.init_db()
+
 
 
 def test_upload_document():
