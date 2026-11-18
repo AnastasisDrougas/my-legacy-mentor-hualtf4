@@ -4,7 +4,10 @@ import html as html_lib
 
 import streamlit as st
 
-from api.backend_client import BackendError, check_health, send_chat
+from api.backend_client import (
+    BackendError, check_health, send_chat, list_conversations,
+    get_conversation, upload_document,
+)
 
 APP_NAME = "My Legacy Mentor"
 
@@ -748,40 +751,55 @@ st.markdown(
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
-
+if "conversation_id" not in st.session_state:
+    st.session_state.conversation_id = None
 if "mode" not in st.session_state:
     st.session_state.mode = "ask"
 
 
 def reset_conversation() -> None:
+    """Start an unsaved chat; existing conversation stays on the Backend."""
+    st.session_state.conversation_id = None
     st.session_state.messages = []
+
+
+def open_conversation(conversation_id: str) -> None:
+    """Load canonical history from FastAPI; never store it locally."""
+    data = get_conversation(conversation_id)
+    messages = data["messages"]
+    st.session_state.conversation_id = conversation_id
+    st.session_state.messages = messages
+    # The Ask/Mentor selection remains unchanged when opening history.
+    # Streamlit does not allow changing a radio widget's session_state key
+    # after the widget has been created during the same script run.
+    # Messages retain their original modes for display; the user controls
+    # the mode for the next request via the sidebar radio.
 
 
 def render_sources(sources: list[dict]) -> None:
     if not sources:
         return
-
     with st.expander(f"Knowledge sources ({len(sources)})"):
-        items = []
         for index, source in enumerate(sources, start=1):
-            title = esc(source.get("title", "Untitled source"))
-            doc_id = esc(source.get("document_id", "N/A"))
-            excerpt = source.get("excerpt")
-            excerpt_html = (
-                f'<div class="source-excerpt">'
-                f'{esc(excerpt).replace(chr(10), "<br>")}</div>'
-                if excerpt
-                else ""
-            )
-            items.append(
+            title = esc(source.get("title") or "Untitled source")
+            source_id = esc(source.get("source_id") or "N/A")
+            source_type = esc(source.get("type") or "Unknown")
+            render_html(
                 '<div class="source">'
-                '<div class="source-title">'
-                f'<span class="source-index">{index}.</span>{title}</div>'
-                f'<div class="source-meta">Document ID: {doc_id}</div>'
-                f"{excerpt_html}"
-                "</div>"
+                f'<div class="source-title"><span class="source-index">{index}.</span>{title}</div>'
+                f'<div class="source-meta">{source_type} · Source ID: {source_id}</div>'
+                '</div>'
             )
-        render_html("".join(items))
+
+
+def render_message(message: dict) -> None:
+    with st.chat_message(message["role"], avatar=message["role"]):
+        if message["role"] == "assistant":
+            mode = message.get("mode")
+            if mode in MODES:
+                st.caption("🎓 Mentor guidance" if mode == "mentor" else "🔧 Ask Senior answer")
+        st.markdown(message["content"])
+        render_sources(message.get("sources") or [])
 
 
 def status_pill(kind: str, text: str) -> None:
@@ -835,28 +853,64 @@ with st.sidebar:
 
     render_html('<div class="section-label">Conversation mode</div>')
 
+    if "mode_selector" not in st.session_state:
+        st.session_state.mode_selector = st.session_state.mode
     selected_mode = st.radio(
         "Choose interaction style",
         options=list(MODES),
         format_func=lambda key: MODES[key]["label"],
         index=list(MODES).index(st.session_state.mode),
         label_visibility="collapsed",
+        key="mode_selector",
     )
 
     if selected_mode != st.session_state.mode:
         st.session_state.mode = selected_mode
+        # Switching modes changes the NEXT request, not the active conversation.
+        st.rerun()
+
+    render_html('<div class="section-label">Conversations</div>')
+    if st.button("＋ New conversation", use_container_width=True):
         reset_conversation()
         st.rerun()
 
-    render_html('<div class="section-label">Session</div>')
+    try:
+        conversations = list_conversations()
+    except BackendError as exc:
+        st.warning("Conversation history is unavailable.")
+        st.caption(str(exc))
+        conversations = []
 
-    if st.button(
-        "Clear conversation",
-        use_container_width=True,
-        disabled=not st.session_state.messages,
-    ):
-        reset_conversation()
-        st.rerun()
+    if not conversations:
+        st.caption("No saved conversations yet.")
+    for conversation in conversations:
+        cid = conversation["id"]
+        stamp = (conversation.get("created_at") or "").replace("T", " ")[:16]
+        display = f"💬 {stamp or cid[:8]} · {cid[:8]}"
+        if st.button(
+            display, key=f"history_{cid}", use_container_width=True,
+            type="primary" if cid == st.session_state.conversation_id else "secondary",
+        ):
+            try:
+                open_conversation(cid)
+            except BackendError as exc:
+                st.error(f"Cannot open conversation: {exc}")
+            else:
+                st.rerun()
+
+    render_html('<div class="section-label">Documents</div>')
+    document = st.file_uploader("Upload a knowledge document", type=["txt", "md", "pdf"])
+    if document is not None and st.button("Upload document", use_container_width=True):
+        types = {"txt": "text/plain", "md": "text/markdown", "pdf": "application/pdf"}
+        extension = document.name.rsplit(".", 1)[-1].lower()
+        try:
+            with st.spinner("Uploading document..."):
+                result = upload_document(document.name, document.getvalue(), types[extension])
+            st.success(f"Uploaded {result['filename']} (status: {result['status']}, ID: {result['id']})")
+            if result["status"] != "ready":
+                st.info("Upload accepted; availability in AI retrieval is not confirmed.")
+        except (BackendError, KeyError) as exc:
+            st.error(f"Upload failed: {exc}")
 
     render_html('<div class="section-label">System status</div>')
 
@@ -952,77 +1006,38 @@ if not st.session_state.messages:
 # ---------------------------------------------------------
 
 for message in st.session_state.messages:
-
-    avatar = "user" if message["role"] == "user" else "assistant"
-
-    with st.chat_message(message["role"], avatar=avatar):
-        st.markdown(message["content"])
-        render_sources(message.get("sources", []))
+    render_message(message)
 
 
 # ---------------------------------------------------------
 # Chat input and response
 # ---------------------------------------------------------
 
-prompt = st.chat_input(
-    "Ask your Senior Engineer a technical question..."
-)
+prompt = st.chat_input("Ask your Senior Engineer a technical question...")
 
 if prompt:
-
-    st.session_state.messages.append(
-        {
-            "role": "user",
-            "content": prompt,
-        }
-    )
-
-    with st.chat_message("user", avatar="user"):
-        st.markdown(prompt)
-
+    pending = {"role": "user", "content": prompt}
+    st.session_state.messages.append(pending)
+    render_message(pending)
     with st.chat_message("assistant", avatar="assistant"):
-
         with st.spinner("Generating response..."):
-
             try:
                 result = send_chat(
-                    prompt,
-                    st.session_state.mode,
+                    prompt, st.session_state.mode, st.session_state.conversation_id
                 )
-
-                answer = result.get(
-                    "answer",
-                    "The backend returned an empty answer.",
-                )
-
-                sources = result.get("sources", [])
-
-                st.markdown(answer)
-                render_sources(sources)
-
-                st.session_state.messages.append(
-                    {
-                        "role": "assistant",
-                        "content": answer,
-                        "sources": sources,
-                    }
-                )
-
+                st.session_state.conversation_id = result["conversation_id"]
+                answer_message = {
+                    "role": "assistant", "content": result["answer"],
+                    "mode": result["mode"], "sources": result["sources"],
+                }
+                st.session_state.messages.append(answer_message)
+                st.caption("🎓 Mentor guidance" if result["mode"] == "mentor" else "🔧 Ask Senior answer")
+                st.markdown(result["answer"])
+                render_sources(result["sources"])
             except BackendError as exc:
-
-                st.error(
-                    "Unable to get a response from the Senior Digital Twin."
-                )
-
+                # Failed exchanges are NOT persisted by the Backend. Do not fake saved history.
+                st.session_state.messages.pop()
+                st.error("Unable to get a response from the Senior Digital Twin.")
                 st.caption(str(exc))
-
-                st.session_state.messages.append(
-                    {
-                        "role": "assistant",
-                        "content": (
-                            "I could not process your request "
-                            "because the backend is unavailable."
-                        ),
-                        "sources": [],
-                    }
-                )
+            else:
+                st.rerun()  # Refresh sidebar list and authoritative state
