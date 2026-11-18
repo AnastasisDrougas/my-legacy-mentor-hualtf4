@@ -130,5 +130,99 @@ def ingest():
     print(f"Chroma path: {CHROMA_PATH}")
 
 
+
+
+
+def ingest_document(file_path: str) -> dict:
+    """
+    Append a TXT, MD or PDF document to the existing
+    senior_knowledge collection without deleting old chunks.
+
+    Re-uploading identical content does not duplicate chunks.
+    """
+    import hashlib
+    from io import BytesIO
+
+    path = Path(file_path)
+
+    if not path.is_file():
+        raise FileNotFoundError(f"Document not found: {path}")
+
+    suffix = path.suffix.lower()
+    if suffix not in {".txt", ".md", ".pdf"}:
+        raise ValueError("Supported formats: .txt, .md, .pdf")
+
+    raw = path.read_bytes()
+    if not raw:
+        raise ValueError("Uploaded document is empty")
+
+    if suffix == ".pdf":
+        from pypdf import PdfReader
+
+        reader = PdfReader(BytesIO(raw))
+        text = "\n".join(
+            page.extract_text() or ""
+            for page in reader.pages
+        )
+    else:
+        text = raw.decode("utf-8-sig")
+
+    if not text.strip():
+        raise ValueError("Document contains no extractable text")
+
+    parts = chunk_text(text)
+    source_id = "UPLOAD-" + hashlib.sha256(raw).hexdigest()[:20]
+
+    ids = [
+        f"{source_id}::chunk::{index}"
+        for index in range(len(parts))
+    ]
+
+    # Never delete or recreate the collection for uploads.
+    client = chromadb.PersistentClient(path=str(CHROMA_PATH))
+    collection = client.get_collection(COLLECTION_NAME)
+
+    existing = set(
+        collection.get(ids=ids, include=[])["ids"]
+    )
+
+    missing = [
+        (index, part)
+        for index, part in enumerate(parts)
+        if ids[index] not in existing
+    ]
+
+    if missing:
+        model = SentenceTransformer(MODEL_NAME, device="cpu")
+        embeddings = model.encode(
+            [part for _, part in missing],
+            batch_size=16,
+            normalize_embeddings=True,
+        )
+
+        collection.add(
+            ids=[ids[index] for index, _ in missing],
+            documents=[part for _, part in missing],
+            metadatas=[
+                {
+                    "source_id": source_id,
+                    "title": path.name,
+                    "type": "document",
+                    "chunk_index": index,
+                }
+                for index, _ in missing
+            ],
+            embeddings=embeddings.tolist(),
+        )
+
+    return {
+        "source_id": source_id,
+        "title": path.name,
+        "type": "document",
+        "chunks_added": len(missing),
+        "total_chunks": collection.count(),
+    }
+
+
 if __name__ == "__main__":
     ingest()
