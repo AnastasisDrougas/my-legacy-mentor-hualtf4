@@ -20,10 +20,10 @@ class Settings:
     ).split(",")
 
     # AI configuration
-    AI_PROVIDER = os.getenv("AI_PROVIDER", "mock")
-    AI_API_KEY = os.getenv("AI_API_KEY", "")
-    AI_MODEL = os.getenv("AI_MODEL", "")
-    AI_BASE_URL = os.getenv("AI_BASE_URL", "")
+    # LLM configuration
+    LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+    LLM_MODEL = os.getenv("LLM_MODEL", "")
+    LLM_BASE_URL = os.getenv("LLM_BASE_URL", "")
 
 
 settings = Settings()
