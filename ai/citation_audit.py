@@ -1,8 +1,12 @@
 
 import re
 
+
+# Detect bracketed source-like IDs, including uploaded
+# document IDs. Checks ID membership, not whether the
+# source supports the claim semantically.
 SOURCE_ID_RE = re.compile(
-    r"\b(?:ADR|COM|DOC|INC|PR|MENTOR)-\d{3}\b",
+    r"\[([A-Z][A-Z0-9]*-[A-Z0-9_-]+)\]",
     flags=re.IGNORECASE,
 )
 
