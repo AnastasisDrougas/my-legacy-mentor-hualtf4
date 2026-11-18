@@ -34,6 +34,7 @@ TOPICS = {
         "patterns": (
             r"\bdeploy\w*\b",
             r"\brelease\b",
+            r"\bfeature[-_ ]flag\w*\b",
             r"\brollout\b",
             r"\bcanary\b",
         ),
