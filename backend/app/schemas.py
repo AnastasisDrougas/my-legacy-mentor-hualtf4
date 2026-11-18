@@ -10,7 +10,7 @@ class ChatRequest(BaseModel):
     @field_validator("question")
     @classmethod
     def validate_question(cls, value: str) -> str:
-        # Reject questions containing only whitespace
+        # Reject whitespace-only questions
         question = value.strip()
 
         if not question:
@@ -20,12 +20,22 @@ class ChatRequest(BaseModel):
 
 
 class Source(BaseModel):
-    document_id: str
+    source_id: str
     title: str
-    excerpt: str
+    type: str
 
 
 class ChatResponse(BaseModel):
     answer: str
     mode: Literal["ask", "mentor"]
     sources: list[Source] = Field(default_factory=list)
+
+
+class DocumentResponse(BaseModel):
+    id: str
+    filename: str
+    content_type: str
+    size_bytes: int
+    status: Literal["uploaded", "processing", "ready", "failed"]
+    error_message: str | None = None
+    created_at: str

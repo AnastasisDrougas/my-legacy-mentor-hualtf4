@@ -1,0 +1,161 @@
+{
+  "DEV-001": {
+    "expected_decision": "Review current query plans and write measurements before retaining, changing or removing the index.",
+    "required_facts": [
+      "Measure current workload",
+      "Check index trade-offs",
+      "Consider safe rollback"
+    ],
+    "critical_errors": [
+      "Assume every added index reduces write contention"
+    ],
+    "historical_source": "ADR-001",
+    "review_status": "pending"
+  },
+  "DEV-002": {
+    "expected_decision": "Use persistent idempotency keys, transactional uniqueness and safe result replay.",
+    "required_facts": [
+      "Client-provided idempotency key",
+      "Persistent uniqueness",
+      "Safe retry behavior"
+    ],
+    "critical_errors": [
+      "Retry an uncertain payment blindly"
+    ],
+    "historical_source": "ADR-002",
+    "review_status": "pending"
+  },
+  "DEV-003": {
+    "expected_decision": "Separate transactional and bulk workloads with bounded retries, backoff and dead-letter handling.",
+    "required_facts": [
+      "Queue isolation",
+      "Exponential backoff",
+      "Dead-letter handling"
+    ],
+    "critical_errors": [
+      "Use unlimited retries as the permanent solution"
+    ],
+    "historical_source": "ADR-003",
+    "review_status": "pending"
+  },
+  "DEV-004": {
+    "expected_decision": "Enforce tenant-scoped authorization in data access and test cross-tenant denial.",
+    "required_facts": [
+      "Tenant-scoped queries",
+      "Negative authorization tests",
+      "Authentication is not resource authorization"
+    ],
+    "critical_errors": [
+      "Disable authorization to restore availability"
+    ],
+    "historical_source": "ADR-004",
+    "review_status": "pending"
+  },
+  "DEV-005": {
+    "expected_decision": "Use a transactional outbox, asynchronous publication and idempotent consumers.",
+    "required_facts": [
+      "Atomic business write and outbox record",
+      "Asynchronous publisher",
+      "Idempotent consumers"
+    ],
+    "critical_errors": [
+      "Assume at-least-once delivery cannot produce duplicates"
+    ],
+    "historical_source": "ADR-005",
+    "review_status": "pending"
+  },
+  "DEV-006": {
+    "expected_decision": "Invalidate or shorten display caching but verify inventory transactionally at checkout.",
+    "required_facts": [
+      "Cache invalidation",
+      "Short display TTL",
+      "Transactional checkout recheck"
+    ],
+    "critical_errors": [
+      "Treat a short cache TTL as a stock guarantee"
+    ],
+    "historical_source": "ADR-006",
+    "review_status": "pending"
+  },
+  "DEV-007": {
+    "expected_decision": "Apply expand-backfill-contract with dual-compatible code.",
+    "required_facts": [
+      "Nullable expansion",
+      "Compatible application versions",
+      "Batched backfill",
+      "Delayed constraint enforcement"
+    ],
+    "critical_errors": [
+      "Apply a destructive mandatory constraint before backfill"
+    ],
+    "historical_source": "ADR-007",
+    "review_status": "pending"
+  },
+  "DEV-008": {
+    "expected_decision": "Apply per-client token-bucket limits with Retry-After semantics and appropriate health-check exemptions.",
+    "required_facts": [
+      "Per-client limits",
+      "Retry-After",
+      "Protect regular users"
+    ],
+    "critical_errors": [
+      "Apply one indiscriminate global limit as the only control"
+    ],
+    "historical_source": "ADR-008",
+    "review_status": "pending"
+  },
+  "DEV-009": {
+    "expected_decision": "Propagate correlation IDs and instrument safe spans for validation, database and payment operations.",
+    "required_facts": [
+      "Correlation IDs",
+      "Dependency-specific spans",
+      "Redaction of sensitive data"
+    ],
+    "critical_errors": [
+      "Log card details or payment tokens"
+    ],
+    "historical_source": "ADR-009",
+    "review_status": "pending"
+  },
+  "DEV-010": {
+    "expected_decision": "Use explicit timeouts, bounded concurrency and a circuit breaker.",
+    "required_facts": [
+      "Timeouts",
+      "Concurrency bounds",
+      "Circuit breaker",
+      "Payment retry safety"
+    ],
+    "critical_errors": [
+      "Blindly retry non-idempotent charges"
+    ],
+    "historical_source": "ADR-010",
+    "review_status": "pending"
+  },
+  "DEV-011": {
+    "expected_decision": "Keep the legacy field temporarily, introduce the new field additively and validate consumer contracts.",
+    "required_facts": [
+      "Backward-compatible response",
+      "Deprecation window",
+      "Consumer contract tests"
+    ],
+    "critical_errors": [
+      "Remove the old field immediately"
+    ],
+    "historical_source": "ADR-011",
+    "review_status": "pending"
+  },
+  "DEV-012": {
+    "expected_decision": "Stop the affected canary, investigate traces and resume gradually only under measurable guardrails.",
+    "required_facts": [
+      "Contain canary impact",
+      "Inspect traces",
+      "Measure tail latency",
+      "Controlled resumption"
+    ],
+    "critical_errors": [
+      "Expand a failing rollout without investigation"
+    ],
+    "historical_source": "ADR-012",
+    "review_status": "pending"
+  }
+}

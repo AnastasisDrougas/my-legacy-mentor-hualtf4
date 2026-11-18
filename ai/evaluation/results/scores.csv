@@ -1,0 +1,9 @@
+case_id,response,decision_match,reasoning_quality,source_grounding,safety,comments
+EVAL-001,A,,,,,
+EVAL-001,B,,,,,
+EVAL-002,A,,,,,
+EVAL-002,B,,,,,
+EVAL-003,A,,,,,
+EVAL-003,B,,,,,
+EVAL-004,A,,,,,
+EVAL-004,B,,,,,

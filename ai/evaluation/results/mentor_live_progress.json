@@ -1,0 +1,95 @@
+[
+  {
+    "question": "Our SQLite database has frequent write locks. Should we immediately migrate to PostgreSQL?",
+    "answer": "**Guiding question**  \nWhat concrete measurements do you have (or can you collect) about how long each write lock is held and how often concurrent writes are contending for the same SQLite file?\n\n**Hint**  \nSQLite’s default locking is file‑level, so a single long‑running write can block all others. Enabling **WAL (Write‑Ahead Logging) mode** and measuring the lock‑wait times will let you see whether the contention is a symptom of the current configuration rather than an inherent limitation of SQLite.  \n\n*This follows the “measure before migrating” pattern we used for the orders‑lookup latency issue, where the team first examined query plans and latency before deciding on a PostgreSQL migration* [ADR‑001][MENTOR‑001][MENTOR‑002].\n\n**Next diagnostic step**  \n1. Switch the SQLite database to WAL mode (`PRAGMA journal_mode=WAL;`).  \n2. Instrument the application (or use SQLite’s `sqlite3_trace_v2`) to record the duration of each write transaction and the frequency of lock‑wait events.  \n\nWith those data you’ll be in a position to decide whether a configuration tweak, an index change, or a more substantial migration is truly needed.",
+    "sources": [
+      {
+        "source_id": "MENTOR-001",
+        "title": "Mentoring 01: Order lookup latency (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "COM-001",
+        "title": "Commit series: Order lookup latency",
+        "type": "commit"
+      },
+      {
+        "source_id": "MENTOR-009",
+        "title": "Mentoring 09: Lost events after transaction (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "MENTOR-002",
+        "title": "Mentoring 02: Order lookup latency (incident response)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  {
+    "question": "I checked the logs. Some write transactions remain open for three seconds.",
+    "answer": "**Guiding question**  \nWhich specific code paths or SQL statements are responsible for the transactions that stay open for three seconds?\n\n**Hint**  \nAdd lightweight instrumentation around every `BEGIN … COMMIT` (or the ORM transaction wrapper you use) that logs the start time, end time, and the exact SQL statement(s) executed. SQLite’s `sqlite3_trace_v2` callback can also emit the SQL text and duration without changing application code.\n\n**Next diagnostic step**  \n1. Enable that instrumentation and collect a sample of the long‑duration writes.  \n2. Correlate the logged statements with request IDs or user actions to see if a particular operation (e.g., a heavy INSERT, a trigger, or a user‑defined function) is the culprit.  \n3. Verify whether the database is running in WAL mode, which can reduce write‑lock contention, and note the current setting (`PRAGMA journal_mode;`).  \n\n*Why this matters* – In past discussions we emphasized “observability before guessing” (see MENTOR‑013) and “measure before migrating” (see ADR‑001). By first pinpointing the exact write patterns that hold locks, you’ll have concrete evidence to decide whether a configuration tweak (e.g., enabling WAL) or a code change is sufficient, rather than jumping straight to a database migration.",
+    "sources": [
+      {
+        "source_id": "MENTOR-001",
+        "title": "Mentoring 01: Order lookup latency (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "MENTOR-013",
+        "title": "Mentoring 13: Unknown checkout timeouts (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "COM-001",
+        "title": "Commit series: Order lookup latency",
+        "type": "commit"
+      },
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-002",
+        "title": "Mentoring 02: Order lookup latency (incident response)",
+        "type": "mentoring"
+      }
+    ]
+  },
+  {
+    "question": "Give me the full solution with verification steps.",
+    "answer": "**RECOMMENDATION**  \nAddress the write‑lock contention in SQLite first, then only consider a PostgreSQL migration if the mitigations do not bring lock‑time down to an acceptable level (e.g., < 200 ms). The immediate actions are:\n\n1. **Instrument every transaction** to capture start‑time, end‑time and the SQL statements executed.  \n2. **Reduce the duration of the longest transactions** (e.g., break large batches, add missing indexes, avoid `SELECT *`).  \n3. **Enable Write‑Ahead Logging (WAL) mode** and tune its checkpoint settings so readers are not blocked by writers.  \n4. **Run a realistic workload benchmark** (same traffic pattern you see in production) and record the distribution of lock‑hold times.  \n5. **If the benchmark still shows frequent > 500 ms write locks**, prototype the same workload against a PostgreSQL instance and compare latency, throughput and operational cost before deciding to migrate.\n\n---\n\n**HISTORICAL PRECEDENT**  \nWhen the orders service experienced a latency explosion, the team did **not** jump straight to a database migration. Instead they:\n\n* Added a composite index on the columns used by the hot query.  \n* Removed the `SELECT *` projection.  \n* Measured the query latency before any migration decision.  \n\nThese steps are recorded in the ADR and commit that explicitly rejected an immediate SQLite‑to‑PostgreSQL migration【ADR-001】,【COM-001】,【MENTOR-001】.\n\n---\n\n**WHY IT APPLIES OR DIFFERS**  \n\n*Matches* – Both situations involve a SQLite deployment that is showing a performance symptom (slow queries vs. long write locks). The senior’s team chose **evidence‑first** rather than a wholesale migration, which aligns with the current need to understand why transactions stay open for three seconds.\n\n*Differs* – The prior case was read‑latency‑driven; here the bottleneck is write‑locking. The specific mitigation (adding an index) may not help lock duration, but the **principle** of measuring, applying the smallest safe fix, and only then considering migration is identical.\n\n---\n\n**NEXT STEPS**  \n\n1. **Add lightweight logging** around the ORM/DB‑API transaction boundaries:  \n   ```python\n   start = time.monotonic()\n   # BEGIN\n   ... execute statements ...\n   # COMMIT\n   duration = time.monotonic() - start\n   logger.info(\"TX %s – %.3fs – %s\", tx_id, duration, sql_summary)\n   ```  \n   Capture this in a structured log (JSON) so you can aggregate later.\n\n2. **Run the instrumented service under a realistic load** (e.g., replay recent production traffic or use a load‑test script).  \n   - Compute p50/p95 lock‑hold times.  \n   - Identify the top‑3 longest‑running transactions.\n\n3. **Optimize the identified transactions**:  \n   - Split large batch inserts into smaller chunks.  \n   - Ensure any `SELECT` inside a write transaction uses appropriate indexes (run `EXPLAIN QUERY PLAN`).  \n   - Switch to `INSERT OR REPLACE` only when necessary; otherwise use `INSERT` with `ON CONFLICT DO NOTHING/UPDATE`.  \n\n4. **Enable WAL mode**:  \n   ```sql\n   PRAGMA journal_mode=WAL;\n   PRAGMA wal_autocheckpoint=1000;   -- adjust as needed\n   ```  \n   Verify that readers are no longer blocked by writers (monitor `sqlite3_wal_checkpoint` stats).\n\n5. **Benchmark against PostgreSQL** (optional, only after steps 1‑4). Deploy a small PostgreSQL instance, run the same workload, and compare latency and lock metrics. Use the results to decide whether a migration’s operational cost is justified.\n\n---\n\n**CONFIDENCE & MISSING EVIDENCE**  \n**MEDIUM** – The evidence (ADR‑001, COM‑001, MENTOR‑001) strongly supports the *measure‑before‑migrate* pattern, which is directly applicable to the current write‑lock issue. However, the sources do not contain concrete data about SQLite write‑lock behavior or WAL tuning, so the exact performance targets and the effectiveness of each mitigation step are inferred rather than documented. Additional measurements (lock‑time distribution, query plans) are required to confirm the solution’s adequacy.",
+    "sources": [
+      {
+        "source_id": "COM-001",
+        "title": "Commit series: Order lookup latency",
+        "type": "commit"
+      },
+      {
+        "source_id": "ADR-001",
+        "title": "ADR: Order lookup latency",
+        "type": "architecture_decision"
+      },
+      {
+        "source_id": "MENTOR-001",
+        "title": "Mentoring 01: Order lookup latency (diagnosis)",
+        "type": "mentoring"
+      },
+      {
+        "source_id": "PR-002",
+        "title": "PR review: Duplicate payments on retry",
+        "type": "pull_request"
+      },
+      {
+        "source_id": "PR-005",
+        "title": "PR review: Lost events after transaction",
+        "type": "pull_request"
+      }
+    ]
+  }
+]

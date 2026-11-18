@@ -1,0 +1,31 @@
+{
+  "question": "\nYou are Alex Morgan, the senior engineer.\n\nWe are preparing a checkout release today.\n\nThree problems appeared simultaneously:\n\n1. SQLite write transactions sometimes remain open\n   for three seconds and produce database lock errors.\n\n2. The payment provider occasionally times out.\n   Some requests have an unknown payment outcome.\n\n3. Management wants the release deployed today\n   because an important customer is waiting.\n\nA junior developer proposes:\n- Adding a composite database index.\n- Retrying all payment requests automatically.\n- Deploying the full release immediately.\n\nWhat would you decide?\n\nExplain:\n1. Your immediate go/no-go decision.\n2. Which proposed fixes are unsafe or insufficient.\n3. What evidence you need.\n4. The safest technical actions, in priority order.\n5. How your previous engineering decisions apply\n   or differ from this situation.\n6. Your confidence and missing information.\n\nCite real historical source IDs.\nDo not invent production metrics or guarantees.\n",
+  "answer": "RECOMMENDATION\nIssue an immediate **NO-GO** for today's release. Do not deploy the full release under pressure while experiencing unhandled payment timeouts and SQLite write lock errors. \n\n---\n\nHISTORICAL PRECEDENT\n- **Payment Retries & Idempotency:** During a past incident involving transient network failures and duplicate payments on retries, the team separated immediate containment from the durable fix by requiring a client-provided idempotency key and enforcing uniqueness in storage [INC-002]. \n- **Payment Gateway Timeouts & Safe Retries:** Technical documentation notes that non-idempotent payments must not be retried blindly, and aggressive timeouts can disrupt recoverable payments [DOC-010].\n- **Database Indexing:** When query latency issues arose, a historical ADR evaluated adding a composite index and measuring performance rather than migrating immediately from SQLite to PostgreSQL [ADR-001].\n\n---\n\nWHY IT APPLIES OR DIFFERS\n- **The Junior's Proposals:** \n  1. *Adding a composite database index:* While a composite index was used historically to address specific query latency [ADR-001], simply adding an index blindly does not solve open SQLite write transactions or database lock errors without evidence of the underlying query bottleneck.\n  2. *Retrying all payment requests automatically:* This is extremely unsafe. Blindly retrying non-idempotent payment requests without idempotency keys risks creating duplicate payments or corrupting financial states [INC-002, DOC-010].\n  3. *Deploying the full release immediately under pressure:* Bypassing safety checks because a customer is waiting ignores production risks and violates stability principles.\n- **Current Constraints:** The presence of unknown payment outcomes due to timeouts means we lack transaction safety guarantees. Deploying now risks compounding customer-facing financial errors.\n\n---\n\nNEXT STEPS\n1. **Halt the Release:** Inform management that deploying with unknown payment outcomes and active database lock errors introduces unacceptable financial and stability risks.\n2. **Isolate and Diagnose Timeouts:** Implement correlation IDs and trace spans to isolate database operations from payment gateway calls before changing retry logic [PR-009].\n3. **Investigate SQLite Write Locks:** Identify which transactions are holding write locks for three seconds and inspect the query plans, rather than applying unmeasured database changes [ADR-001].\n\n---\n\nCONFIDENCE & MISSING EVIDENCE\n**LOW**\n\n*Explanation:* We are missing critical evidence regarding the root causes of the three-second SQLite write transactions and lack visibility into whether the timed-out payment requests actually reached the gateway provider or succeeded downstream. Without correlation IDs and proper tracing [PR-009], proceeding with a release or automated retries is unsafe.",
+  "sources": [
+    {
+      "source_id": "ADR-001",
+      "title": "ADR: Order lookup latency",
+      "type": "architecture_decision"
+    },
+    {
+      "source_id": "INC-002",
+      "title": "Incident: Duplicate payments on retry",
+      "type": "incident"
+    },
+    {
+      "source_id": "ADR-012",
+      "title": "ADR: Risky recommendation rollout",
+      "type": "architecture_decision"
+    },
+    {
+      "source_id": "PR-009",
+      "title": "PR review: Unknown checkout timeouts",
+      "type": "pull_request"
+    },
+    {
+      "source_id": "DOC-010",
+      "title": "Payment gateway slowdown: system notes",
+      "type": "technical_document"
+    }
+  ]
+}

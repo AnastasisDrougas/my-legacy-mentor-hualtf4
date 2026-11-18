@@ -1,4 +1,4 @@
-# Python
+# Python cache and compiled files
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -10,7 +10,17 @@ venv/
 # IDE
 .idea/
 
-# Environment variables
+# Environment variables and local configuration
 .env
 .env.*
 !.env.example
+
+# Local databases
+*.db
+*.sqlite3
+
+# AI runtime and local files
+ai/storage/
+
+# Backend uploaded documents
+/backend/data/uploads/

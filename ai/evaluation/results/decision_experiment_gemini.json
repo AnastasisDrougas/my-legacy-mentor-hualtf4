@@ -1,0 +1,497 @@
+{
+  "experiment": "decision_quality_v1",
+  "model": "gemini-3.5-flash-lite",
+  "created_at": "2026-11-14T10:49:15.854853+00:00",
+  "cases": {
+    "V3-01-01": {
+      "status": "success",
+      "category": "historical_adaptation",
+      "original_question": "An orders query is slow, but EXPLAIN shows an index already used. Should Alex add another index?",
+      "experiment_question": "DECISION QUALITY RULES\n\nYou are assisting as Alex Morgan's Senior Digital Twin.\n\nUse the retrieved historical evidence to reason about the\ncurrent engineering situation.\n\nApply these rules:\n\n1. CURRENT CONTEXT\nIdentify the current failure mode, constraints, and operational risks.\nDo not assume that the current system has the same conditions as a\nprevious incident.\n\n2. HISTORICAL EVIDENCE\nIdentify the relevant historical decision, its context, and the\nengineering principle behind it.\n\n3. CHANGED ASSUMPTIONS\nExplicitly explain any differences between the historical case\nand the current situation.\nNever copy a historical fix when its original assumptions no longer hold.\n\n4. TECHNICAL SAFETY\nPrioritize containment and verification when dealing with payments,\ncross-tenant authorization, irreversible migrations, data loss,\nor production outages.\n\nFor payment operations:\n- Never recommend blind retries after an unknown provider outcome.\n- A local unique constraint does not guarantee global uniqueness\n  across independent, uncoordinated databases.\n- Distinguish payment intent creation from confirmed payment success.\n- Consider reconciliation when the provider outcome is unknown.\n\nFor security:\n- Never disable tenant authorization to restore availability.\n- Do not re-enable a vulnerable endpoint until authorization scope\n  has been verified and tested.\n\nFor migrations:\n- Do not assume that transformed data can be rolled back safely.\n- Prefer reversible, compatible stages when possible.\n\n5. EVIDENCE VERSUS INFERENCE\nClearly distinguish:\n- Documented historical facts\n- Current facts supplied by the user\n- New engineering recommendations inferred from those facts\n\nNever present a newly inferred solution as something Alex\npersonally implemented in the past.\n\n6. CITATIONS\nCite only source IDs actually present in the retrieved evidence.\nDo not invent source IDs, historical incidents, measurements, dates,\npersonal experiences, or guarantees.\n\n7. UNCERTAINTY\nIf there is no relevant historical evidence, say so explicitly.\nDo not manufacture an answer to satisfy a false premise.\n\nIf evidence supports a general principle but not a specific\nimplementation, explain that limitation.\n\n8. RECOMMENDATION\nProvide a direct recommendation and, where appropriate,\nprioritized next steps and missing evidence.\n\nKeep the existing response format and application contract.\nAvoid unnecessary repetition.\n\nCURRENT USER QUESTION\nAn orders query is slow, but EXPLAIN shows an index already used. Should Alex add another index?\n\nAnswer the CURRENT USER QUESTION using the rules above.",
+      "response": {
+        "answer": "RECOMMENDATION\nDo not add another index blindly. Instead, inspect the query execution plan details, filter selectivity, and table statistics to gather evidence before modifying schema.\n\nHISTORICAL PRECEDENT\nIn past incidents involving performance or unexpected behavior, the documented approach required gathering observable evidence before selecting a remedy, rather than guessing [INC-009]. Similarly, architectural and payment decisions relied on specific production constraints and evidence rather than universal rules [ADR-002].\n\nWHY IT APPLIES OR DIFFERS\nThe current situation involves a slow orders query where an index is already utilized by `EXPLAIN`. This differs from past historical contexts like idempotency or gateway timeouts [INC-002, INC-009, DOC-010]. Adding another index when one is already in use risks write overhead, storage bloat, and maintenance cost without solving the underlying bottleneck (such as poor selectivity, large data volumes, or inefficient join patterns). The underlying principle—requiring evidence before optimization—directly applies.\n\nNEXT STEPS\n1. Review the full `EXPLAIN ANALYZE` output to check row estimates against actual execution counts.\n2. Examine query filter predicates and table statistics to see if the database engine is performing sequential scans despite the index.\n\nCONFIDENCE & MISSING EVIDENCE\nLOW: There is no relevant historical evidence or query plan telemetry provided for this specific slow orders query. Query text, table schema, execution statistics, and data volume are missing.",
+        "sources": [
+          {
+            "source_id": "INC-002",
+            "title": "Incident: Duplicate payments on retry",
+            "type": "incident"
+          },
+          {
+            "source_id": "DOC-010",
+            "title": "Payment gateway slowdown: system notes",
+            "type": "technical_document"
+          },
+          {
+            "source_id": "MENTOR-004",
+            "title": "Mentoring 04: Duplicate payments on retry (incident response)",
+            "type": "mentoring"
+          },
+          {
+            "source_id": "ADR-002",
+            "title": "ADR: Duplicate payments on retry",
+            "type": "architecture_decision"
+          },
+          {
+            "source_id": "INC-009",
+            "title": "Incident: Unknown checkout timeouts",
+            "type": "incident"
+          }
+        ]
+      },
+      "audit": {
+        "answer_present": true,
+        "answer_characters": 1549,
+        "retrieved_source_count": 5,
+        "cited_source_count": 4,
+        "unsupported_citation_ids": [],
+        "uncited_retrieved_source_ids": [
+          "MENTOR-004"
+        ],
+        "citation_ids_valid": true,
+        "requires_human_review": true
+      },
+      "completed_at": "2026-11-14T10:49:19.981882+00:00"
+    },
+    "V3-01-02": {
+      "status": "success",
+      "category": "historical_adaptation",
+      "original_question": "SQLite reads are fast but 20 concurrent writers cause lock errors. Should we copy the historical indexing fix?",
+      "experiment_question": "DECISION QUALITY RULES\n\nYou are assisting as Alex Morgan's Senior Digital Twin.\n\nUse the retrieved historical evidence to reason about the\ncurrent engineering situation.\n\nApply these rules:\n\n1. CURRENT CONTEXT\nIdentify the current failure mode, constraints, and operational risks.\nDo not assume that the current system has the same conditions as a\nprevious incident.\n\n2. HISTORICAL EVIDENCE\nIdentify the relevant historical decision, its context, and the\nengineering principle behind it.\n\n3. CHANGED ASSUMPTIONS\nExplicitly explain any differences between the historical case\nand the current situation.\nNever copy a historical fix when its original assumptions no longer hold.\n\n4. TECHNICAL SAFETY\nPrioritize containment and verification when dealing with payments,\ncross-tenant authorization, irreversible migrations, data loss,\nor production outages.\n\nFor payment operations:\n- Never recommend blind retries after an unknown provider outcome.\n- A local unique constraint does not guarantee global uniqueness\n  across independent, uncoordinated databases.\n- Distinguish payment intent creation from confirmed payment success.\n- Consider reconciliation when the provider outcome is unknown.\n\nFor security:\n- Never disable tenant authorization to restore availability.\n- Do not re-enable a vulnerable endpoint until authorization scope\n  has been verified and tested.\n\nFor migrations:\n- Do not assume that transformed data can be rolled back safely.\n- Prefer reversible, compatible stages when possible.\n\n5. EVIDENCE VERSUS INFERENCE\nClearly distinguish:\n- Documented historical facts\n- Current facts supplied by the user\n- New engineering recommendations inferred from those facts\n\nNever present a newly inferred solution as something Alex\npersonally implemented in the past.\n\n6. CITATIONS\nCite only source IDs actually present in the retrieved evidence.\nDo not invent source IDs, historical incidents, measurements, dates,\npersonal experiences, or guarantees.\n\n7. UNCERTAINTY\nIf there is no relevant historical evidence, say so explicitly.\nDo not manufacture an answer to satisfy a false premise.\n\nIf evidence supports a general principle but not a specific\nimplementation, explain that limitation.\n\n8. RECOMMENDATION\nProvide a direct recommendation and, where appropriate,\nprioritized next steps and missing evidence.\n\nKeep the existing response format and application contract.\nAvoid unnecessary repetition.\n\nCURRENT USER QUESTION\nSQLite reads are fast but 20 concurrent writers cause lock errors. Should we copy the historical indexing fix?\n\nAnswer the CURRENT USER QUESTION using the rules above.",
+      "response": {
+        "answer": "RECOMMENDATION\nDo not copy the historical indexing fix; indexing addresses slow read queries and filter patterns [ADR-001], whereas 20 concurrent writers causing lock errors in SQLite is a concurrency and write-contention issue, not a read-latency or query-projection issue.\n\nHISTORICAL PRECEDENT\nHistorically, when facing order lookup latency issues, the team added a composite index, removed `SELECT *` projections, and measured query performance before considering a database migration from SQLite [ADR-001].\n\nWHY IT APPLIES OR DIFFERS\nThe historical case addressed read performance and query latency constraints [ADR-001]. The current situation involves write concurrency limits (20 concurrent writers causing SQLite lock errors). While the principle of evidence-driven investigation remains valid, the historical indexing fix targets read patterns and will not resolve database lock errors caused by concurrent write transactions. \n\nNEXT STEPS\n1. Measure current write transaction durations and frequency of lock errors under peak load.\n2. Evaluate SQLite WAL (Write-Ahead Logging) mode or connection pooling behavior to see if write concurrency can be safely managed without immediate migration.\n3. If concurrency requirements permanently exceed SQLite's write capabilities, evaluate a database migration using measured workload evidence rather than applying an index fix [ADR-001].\n\nCONFIDENCE & MISSING EVIDENCE\nMEDIUM: There is direct historical evidence regarding SQLite and migration considerations [ADR-001], but the evidence does not provide current concurrency metrics, write transaction durations, or connection pooling configurations for the active system.",
+        "sources": [
+          {
+            "source_id": "ADR-001",
+            "title": "ADR: Order lookup latency",
+            "type": "architecture_decision"
+          },
+          {
+            "source_id": "INC-002",
+            "title": "Incident: Duplicate payments on retry",
+            "type": "incident"
+          },
+          {
+            "source_id": "DOC-010",
+            "title": "Payment gateway slowdown: system notes",
+            "type": "technical_document"
+          },
+          {
+            "source_id": "MENTOR-004",
+            "title": "Mentoring 04: Duplicate payments on retry (incident response)",
+            "type": "mentoring"
+          },
+          {
+            "source_id": "ADR-002",
+            "title": "ADR: Duplicate payments on retry",
+            "type": "architecture_decision"
+          }
+        ]
+      },
+      "audit": {
+        "answer_present": true,
+        "answer_characters": 1672,
+        "retrieved_source_count": 5,
+        "cited_source_count": 1,
+        "unsupported_citation_ids": [],
+        "uncited_retrieved_source_ids": [
+          "ADR-002",
+          "DOC-010",
+          "INC-002",
+          "MENTOR-004"
+        ],
+        "citation_ids_valid": true,
+        "requires_human_review": true
+      },
+      "completed_at": "2026-11-14T10:49:28.239354+00:00"
+    },
+    "V3-01-04": {
+      "status": "success",
+      "category": "historical_adaptation",
+      "original_question": "A mobile client cannot upgrade for six months. How should an API response field be deprecated?",
+      "experiment_question": "DECISION QUALITY RULES\n\nYou are assisting as Alex Morgan's Senior Digital Twin.\n\nUse the retrieved historical evidence to reason about the\ncurrent engineering situation.\n\nApply these rules:\n\n1. CURRENT CONTEXT\nIdentify the current failure mode, constraints, and operational risks.\nDo not assume that the current system has the same conditions as a\nprevious incident.\n\n2. HISTORICAL EVIDENCE\nIdentify the relevant historical decision, its context, and the\nengineering principle behind it.\n\n3. CHANGED ASSUMPTIONS\nExplicitly explain any differences between the historical case\nand the current situation.\nNever copy a historical fix when its original assumptions no longer hold.\n\n4. TECHNICAL SAFETY\nPrioritize containment and verification when dealing with payments,\ncross-tenant authorization, irreversible migrations, data loss,\nor production outages.\n\nFor payment operations:\n- Never recommend blind retries after an unknown provider outcome.\n- A local unique constraint does not guarantee global uniqueness\n  across independent, uncoordinated databases.\n- Distinguish payment intent creation from confirmed payment success.\n- Consider reconciliation when the provider outcome is unknown.\n\nFor security:\n- Never disable tenant authorization to restore availability.\n- Do not re-enable a vulnerable endpoint until authorization scope\n  has been verified and tested.\n\nFor migrations:\n- Do not assume that transformed data can be rolled back safely.\n- Prefer reversible, compatible stages when possible.\n\n5. EVIDENCE VERSUS INFERENCE\nClearly distinguish:\n- Documented historical facts\n- Current facts supplied by the user\n- New engineering recommendations inferred from those facts\n\nNever present a newly inferred solution as something Alex\npersonally implemented in the past.\n\n6. CITATIONS\nCite only source IDs actually present in the retrieved evidence.\nDo not invent source IDs, historical incidents, measurements, dates,\npersonal experiences, or guarantees.\n\n7. UNCERTAINTY\nIf there is no relevant historical evidence, say so explicitly.\nDo not manufacture an answer to satisfy a false premise.\n\nIf evidence supports a general principle but not a specific\nimplementation, explain that limitation.\n\n8. RECOMMENDATION\nProvide a direct recommendation and, where appropriate,\nprioritized next steps and missing evidence.\n\nKeep the existing response format and application contract.\nAvoid unnecessary repetition.\n\nCURRENT USER QUESTION\nA mobile client cannot upgrade for six months. How should an API response field be deprecated?\n\nAnswer the CURRENT USER QUESTION using the rules above.",
+      "response": {
+        "answer": "RECOMMENDATION\nMaintain backward compatibility by keeping the existing field in the API response while introducing the replacement field alongside it, allowing the mobile client to continue functioning for its six-month upgrade constraint.\n\nHISTORICAL PRECEDENT\nThe retrieved evidence documents historical decisions around payment retries, idempotency keys, and gateway timeouts (e.g., ADR-002, INC-002, DOC-010), but there is no retrieved historical precedent or documented decision in the provided evidence specifically addressing API response field deprecation or mobile client upgrade cycles.\n\nWHY IT APPLIES OR DIFFERS\nThe current situation involves API evolution and client version constraints, whereas the historical evidence focuses entirely on backend payment safety, idempotency enforcement, and tracing/observability during timeouts (ADR-002, INC-002, DOC-010, INC-009). Therefore, the specific historical implementations for payment retries do not directly apply to API schema deprecation, though the underlying engineering principle of managing constraints safely remains relevant.\n\nNEXT STEPS\n1. Expose both the legacy field and the new field simultaneously in the API response payload so that older mobile clients do not break during the six-month window.\n2. Monitor API usage metrics to track the adoption rate of the new field versus the deprecated field across client versions.\n3. Plan the removal of the deprecated field only after the six-month upgrade window has closed and telemetry confirms zero traffic using the legacy field.\n\nCONFIDENCE & MISSING EVIDENCE\nLOW. There is no relevant historical evidence or documented precedent in the provided sources regarding API field deprecation strategies or mobile client version lifecycles.",
+        "sources": [
+          {
+            "source_id": "INC-002",
+            "title": "Incident: Duplicate payments on retry",
+            "type": "incident"
+          },
+          {
+            "source_id": "DOC-010",
+            "title": "Payment gateway slowdown: system notes",
+            "type": "technical_document"
+          },
+          {
+            "source_id": "MENTOR-004",
+            "title": "Mentoring 04: Duplicate payments on retry (incident response)",
+            "type": "mentoring"
+          },
+          {
+            "source_id": "ADR-002",
+            "title": "ADR: Duplicate payments on retry",
+            "type": "architecture_decision"
+          },
+          {
+            "source_id": "INC-009",
+            "title": "Incident: Unknown checkout timeouts",
+            "type": "incident"
+          }
+        ]
+      },
+      "audit": {
+        "answer_present": true,
+        "answer_characters": 1755,
+        "retrieved_source_count": 5,
+        "cited_source_count": 4,
+        "unsupported_citation_ids": [],
+        "uncited_retrieved_source_ids": [
+          "MENTOR-004"
+        ],
+        "citation_ids_valid": true,
+        "requires_human_review": true
+      },
+      "completed_at": "2026-11-14T10:49:36.579329+00:00"
+    },
+    "V3-02-01": {
+      "status": "success",
+      "category": "complex_incident",
+      "original_question": "SQLite write locks and payment timeouts occur simultaneously during a checkout release. What is the safest decision?",
+      "experiment_question": "DECISION QUALITY RULES\n\nYou are assisting as Alex Morgan's Senior Digital Twin.\n\nUse the retrieved historical evidence to reason about the\ncurrent engineering situation.\n\nApply these rules:\n\n1. CURRENT CONTEXT\nIdentify the current failure mode, constraints, and operational risks.\nDo not assume that the current system has the same conditions as a\nprevious incident.\n\n2. HISTORICAL EVIDENCE\nIdentify the relevant historical decision, its context, and the\nengineering principle behind it.\n\n3. CHANGED ASSUMPTIONS\nExplicitly explain any differences between the historical case\nand the current situation.\nNever copy a historical fix when its original assumptions no longer hold.\n\n4. TECHNICAL SAFETY\nPrioritize containment and verification when dealing with payments,\ncross-tenant authorization, irreversible migrations, data loss,\nor production outages.\n\nFor payment operations:\n- Never recommend blind retries after an unknown provider outcome.\n- A local unique constraint does not guarantee global uniqueness\n  across independent, uncoordinated databases.\n- Distinguish payment intent creation from confirmed payment success.\n- Consider reconciliation when the provider outcome is unknown.\n\nFor security:\n- Never disable tenant authorization to restore availability.\n- Do not re-enable a vulnerable endpoint until authorization scope\n  has been verified and tested.\n\nFor migrations:\n- Do not assume that transformed data can be rolled back safely.\n- Prefer reversible, compatible stages when possible.\n\n5. EVIDENCE VERSUS INFERENCE\nClearly distinguish:\n- Documented historical facts\n- Current facts supplied by the user\n- New engineering recommendations inferred from those facts\n\nNever present a newly inferred solution as something Alex\npersonally implemented in the past.\n\n6. CITATIONS\nCite only source IDs actually present in the retrieved evidence.\nDo not invent source IDs, historical incidents, measurements, dates,\npersonal experiences, or guarantees.\n\n7. UNCERTAINTY\nIf there is no relevant historical evidence, say so explicitly.\nDo not manufacture an answer to satisfy a false premise.\n\nIf evidence supports a general principle but not a specific\nimplementation, explain that limitation.\n\n8. RECOMMENDATION\nProvide a direct recommendation and, where appropriate,\nprioritized next steps and missing evidence.\n\nKeep the existing response format and application contract.\nAvoid unnecessary repetition.\n\nCURRENT USER QUESTION\nSQLite write locks and payment timeouts occur simultaneously during a checkout release. What is the safest decision?\n\nAnswer the CURRENT USER QUESTION using the rules above.",
+      "response": {
+        "answer": "RECOMMENDATION\nDo not perform blind retries on timed-out payments [DOC-010], and avoid holding open database transactions during external gateway calls. Separate the payment intent creation from the outcome verification, and handle the unknown provider outcome via status checks or reconciliation.\n\nHISTORICAL PRECEDENT\nHistorically, the team addressed duplicate payment risks by requiring a client-provided idempotency key, enforcing uniqueness per customer in storage, and returning original results on safe retries [INC-002, MENTOR-004]. For gateway slowdowns, the documentation specifies that engineers must not retry non-idempotent payments blindly, and recommends tuning breaker thresholds to preserve hard timeouts [DOC-010]. Regarding database choices, an architectural decision previously evaluated query latency on SQLite and noted that migration to PostgreSQL should only be considered if measurements change against a defined workload [ADR-001].\n\nWHY IT APPLIES OR DIFFERS\nThe current situation combines SQLite write-lock contention with external payment timeouts. While the principle of avoiding blind retries still applies [DOC-010, INC-002], the presence of SQLite write locks introduces distinct concurrency constraints compared to past idempotency incidents. Furthermore, historical evidence on database performance cautions against unmeasured migrations [ADR-001]. Applying external payment timeouts concurrently with database write locks means that holding transactions open during slow gateway calls will exacerbate lock contention.\n\nNEXT STEPS\n1. Inspect connection and transaction lifecycles to ensure database transactions are closed before initiating external network calls to the payment gateway.\n2. Implement payment status checks or reconciliation workflows to handle unknown provider outcomes rather than retrying blindly [DOC-010].\n3. Measure SQLite write latency and lock contention metrics under load before considering structural changes [ADR-001].\n\nCONFIDENCE & MISSING EVIDENCE\nMEDIUM. The retrieved evidence covers payment safety principles, non-idempotent retry restrictions [DOC-010, INC-002], and SQLite query evaluation constraints [ADR-001], but lacks direct telemetry measurements for the specific lock durations and gateway timeout frequencies occurring in the current checkout release.",
+        "sources": [
+          {
+            "source_id": "ADR-001",
+            "title": "ADR: Order lookup latency",
+            "type": "architecture_decision"
+          },
+          {
+            "source_id": "INC-002",
+            "title": "Incident: Duplicate payments on retry",
+            "type": "incident"
+          },
+          {
+            "source_id": "ADR-012",
+            "title": "ADR: Risky recommendation rollout",
+            "type": "architecture_decision"
+          },
+          {
+            "source_id": "DOC-010",
+            "title": "Payment gateway slowdown: system notes",
+            "type": "technical_document"
+          },
+          {
+            "source_id": "MENTOR-004",
+            "title": "Mentoring 04: Duplicate payments on retry (incident response)",
+            "type": "mentoring"
+          }
+        ]
+      },
+      "audit": {
+        "answer_present": true,
+        "answer_characters": 2328,
+        "retrieved_source_count": 5,
+        "cited_source_count": 4,
+        "unsupported_citation_ids": [],
+        "uncited_retrieved_source_ids": [
+          "ADR-012"
+        ],
+        "citation_ids_valid": true,
+        "requires_human_review": true
+      },
+      "completed_at": "2026-11-14T10:49:44.946460+00:00"
+    },
+    "V3-02-04": {
+      "status": "success",
+      "category": "complex_incident",
+      "original_question": "A provider timeout has an unknown outcome and a client retries with the same payment key from two devices. Design recovery.",
+      "experiment_question": "DECISION QUALITY RULES\n\nYou are assisting as Alex Morgan's Senior Digital Twin.\n\nUse the retrieved historical evidence to reason about the\ncurrent engineering situation.\n\nApply these rules:\n\n1. CURRENT CONTEXT\nIdentify the current failure mode, constraints, and operational risks.\nDo not assume that the current system has the same conditions as a\nprevious incident.\n\n2. HISTORICAL EVIDENCE\nIdentify the relevant historical decision, its context, and the\nengineering principle behind it.\n\n3. CHANGED ASSUMPTIONS\nExplicitly explain any differences between the historical case\nand the current situation.\nNever copy a historical fix when its original assumptions no longer hold.\n\n4. TECHNICAL SAFETY\nPrioritize containment and verification when dealing with payments,\ncross-tenant authorization, irreversible migrations, data loss,\nor production outages.\n\nFor payment operations:\n- Never recommend blind retries after an unknown provider outcome.\n- A local unique constraint does not guarantee global uniqueness\n  across independent, uncoordinated databases.\n- Distinguish payment intent creation from confirmed payment success.\n- Consider reconciliation when the provider outcome is unknown.\n\nFor security:\n- Never disable tenant authorization to restore availability.\n- Do not re-enable a vulnerable endpoint until authorization scope\n  has been verified and tested.\n\nFor migrations:\n- Do not assume that transformed data can be rolled back safely.\n- Prefer reversible, compatible stages when possible.\n\n5. EVIDENCE VERSUS INFERENCE\nClearly distinguish:\n- Documented historical facts\n- Current facts supplied by the user\n- New engineering recommendations inferred from those facts\n\nNever present a newly inferred solution as something Alex\npersonally implemented in the past.\n\n6. CITATIONS\nCite only source IDs actually present in the retrieved evidence.\nDo not invent source IDs, historical incidents, measurements, dates,\npersonal experiences, or guarantees.\n\n7. UNCERTAINTY\nIf there is no relevant historical evidence, say so explicitly.\nDo not manufacture an answer to satisfy a false premise.\n\nIf evidence supports a general principle but not a specific\nimplementation, explain that limitation.\n\n8. RECOMMENDATION\nProvide a direct recommendation and, where appropriate,\nprioritized next steps and missing evidence.\n\nKeep the existing response format and application contract.\nAvoid unnecessary repetition.\n\nCURRENT USER QUESTION\nA provider timeout has an unknown outcome and a client retries with the same payment key from two devices. Design recovery.\n\nAnswer the CURRENT USER QUESTION using the rules above.",
+      "response": {
+        "answer": "RECOMMENDATION\nDo not perform blind retries or assume the payment succeeded or failed [DOC-010]; instead, query the payment provider to reconcile the unknown status using the client's payment key, and ensure atomic request deduplication in storage to handle concurrent requests from multiple devices [INC-002, ADR-002].\n\nHISTORICAL PRECEDENT\nIn past incidents addressing duplicate payments on retry, the team required a client-provided idempotency key, enforced uniqueness per customer in storage, and returned original results on safe retries [INC-002, ADR-002, MENTOR-004]. \n\nWHY IT APPLIES OR DIFFERS\nThe current situation shares the core challenge of the historical cases: handling retries safely when requests originate concurrently (in this case, from two devices) [INC-002, ADR-002]. However, because the provider timeout resulted in an *unknown outcome*, a simple duplicate check in local storage is insufficient on its own. We cannot safely assume the external charge did or did not happen without reconciling the state with the external payment provider [DOC-010].\n\nNEXT STEPS\n1. Query the payment provider's API using the payment/idempotency key to check the actual transaction status.\n2. Implement or verify atomic uniqueness enforcement in storage per customer so that concurrent attempts from multiple devices map safely to the single reconciled outcome [INC-002, ADR-002].\n3. Ensure that tracing and correlation IDs are propagated to track the state across the validation, database, and provider calls [INC-009].\n\nCONFIDENCE & MISSING EVIDENCE\nMEDIUM. Historical precedent covers idempotency keys and safe retries [ADR-002], but the retrieved evidence does not specify the exact response payload of the external provider during this specific timeout scenario, requiring us to rely on provider-side status reconciliation.",
+        "sources": [
+          {
+            "source_id": "INC-002",
+            "title": "Incident: Duplicate payments on retry",
+            "type": "incident"
+          },
+          {
+            "source_id": "DOC-010",
+            "title": "Payment gateway slowdown: system notes",
+            "type": "technical_document"
+          },
+          {
+            "source_id": "MENTOR-004",
+            "title": "Mentoring 04: Duplicate payments on retry (incident response)",
+            "type": "mentoring"
+          },
+          {
+            "source_id": "ADR-002",
+            "title": "ADR: Duplicate payments on retry",
+            "type": "architecture_decision"
+          },
+          {
+            "source_id": "INC-009",
+            "title": "Incident: Unknown checkout timeouts",
+            "type": "incident"
+          }
+        ]
+      },
+      "audit": {
+        "answer_present": true,
+        "answer_characters": 1835,
+        "retrieved_source_count": 5,
+        "cited_source_count": 5,
+        "unsupported_citation_ids": [],
+        "uncited_retrieved_source_ids": [],
+        "citation_ids_valid": true,
+        "requires_human_review": true
+      },
+      "completed_at": "2026-11-14T10:49:53.288473+00:00"
+    },
+    "V3-02-06": {
+      "status": "success",
+      "category": "complex_incident",
+      "original_question": "Old mobile clients depend on an API field while a database migration renames its backing column. Plan a safe release.",
+      "experiment_question": "DECISION QUALITY RULES\n\nYou are assisting as Alex Morgan's Senior Digital Twin.\n\nUse the retrieved historical evidence to reason about the\ncurrent engineering situation.\n\nApply these rules:\n\n1. CURRENT CONTEXT\nIdentify the current failure mode, constraints, and operational risks.\nDo not assume that the current system has the same conditions as a\nprevious incident.\n\n2. HISTORICAL EVIDENCE\nIdentify the relevant historical decision, its context, and the\nengineering principle behind it.\n\n3. CHANGED ASSUMPTIONS\nExplicitly explain any differences between the historical case\nand the current situation.\nNever copy a historical fix when its original assumptions no longer hold.\n\n4. TECHNICAL SAFETY\nPrioritize containment and verification when dealing with payments,\ncross-tenant authorization, irreversible migrations, data loss,\nor production outages.\n\nFor payment operations:\n- Never recommend blind retries after an unknown provider outcome.\n- A local unique constraint does not guarantee global uniqueness\n  across independent, uncoordinated databases.\n- Distinguish payment intent creation from confirmed payment success.\n- Consider reconciliation when the provider outcome is unknown.\n\nFor security:\n- Never disable tenant authorization to restore availability.\n- Do not re-enable a vulnerable endpoint until authorization scope\n  has been verified and tested.\n\nFor migrations:\n- Do not assume that transformed data can be rolled back safely.\n- Prefer reversible, compatible stages when possible.\n\n5. EVIDENCE VERSUS INFERENCE\nClearly distinguish:\n- Documented historical facts\n- Current facts supplied by the user\n- New engineering recommendations inferred from those facts\n\nNever present a newly inferred solution as something Alex\npersonally implemented in the past.\n\n6. CITATIONS\nCite only source IDs actually present in the retrieved evidence.\nDo not invent source IDs, historical incidents, measurements, dates,\npersonal experiences, or guarantees.\n\n7. UNCERTAINTY\nIf there is no relevant historical evidence, say so explicitly.\nDo not manufacture an answer to satisfy a false premise.\n\nIf evidence supports a general principle but not a specific\nimplementation, explain that limitation.\n\n8. RECOMMENDATION\nProvide a direct recommendation and, where appropriate,\nprioritized next steps and missing evidence.\n\nKeep the existing response format and application contract.\nAvoid unnecessary repetition.\n\nCURRENT USER QUESTION\nOld mobile clients depend on an API field while a database migration renames its backing column. Plan a safe release.\n\nAnswer the CURRENT USER QUESTION using the rules above.",
+      "response": {
+        "answer": "RECOMMENDATION\nUse an expanding-contracting (expand-and-contract) database migration pattern combined with an API compatibility layer (such as a property mapping or alias) so that old mobile clients can continue reading the old field name while the new column name is populated and transitioned safely.\n\nHISTORICAL PRECEDENT\nThe available records do not contain a direct historical precedent for mobile client API field versioning or database column renaming migrations. While historical decisions discuss controlled rollouts using feature flags [ADR-012] and performance measurements before database schema changes [ADR-001], there is no documented past incident or decision addressing mobile client dependency during a database column rename.\n\nWHY IT APPLIES OR DIFFERS\nThe current situation differs fundamentally from the retrieved historical cases. Historical records cover query performance tuning and index additions in SQLite versus PostgreSQL [ADR-001], and canary feature flag toggling for recommendations [ADR-012]. Renaming a database backing column while legacy clients still request the old field name introduces a schema-to-contract coupling problem rather than a pure query optimization or canary routing problem. However, the underlying principle of change safety—preferring reversible, compatible stages and avoiding unverified breaking changes—remains directly applicable.\n\nNEXT STEPS\n1. **Implement a backward-compatible API mapping:** Update the API serialization layer to expose both the old and new field names temporarily, mapping them to the underlying storage during the transition phase.\n2. **Execute an expandable database migration:** Add the new column alongside the old column (or use a view/alias), backfill data if necessary, and update application writes to populate both columns before dropping the old one in a later release.\n3. **Monitor client usage metrics:** Track API request logs to verify when old mobile clients have updated or phased out their dependency on the legacy field before executing the final contraction phase of the migration.\n\nCONFIDENCE & MISSING EVIDENCE\nLOW. \n*Short explanation:* There is no direct historical evidence or documented past implementation in the retrieved sources for handling mobile client schema contract decoupling during column renames. The recommendation relies on standard backend compatibility patterns rather than documented personal experience from the sources.",
+        "sources": [
+          {
+            "source_id": "ADR-001",
+            "title": "ADR: Order lookup latency",
+            "type": "architecture_decision"
+          },
+          {
+            "source_id": "INC-002",
+            "title": "Incident: Duplicate payments on retry",
+            "type": "incident"
+          },
+          {
+            "source_id": "ADR-012",
+            "title": "ADR: Risky recommendation rollout",
+            "type": "architecture_decision"
+          },
+          {
+            "source_id": "DOC-010",
+            "title": "Payment gateway slowdown: system notes",
+            "type": "technical_document"
+          },
+          {
+            "source_id": "MENTOR-004",
+            "title": "Mentoring 04: Duplicate payments on retry (incident response)",
+            "type": "mentoring"
+          }
+        ]
+      },
+      "audit": {
+        "answer_present": true,
+        "answer_characters": 2444,
+        "retrieved_source_count": 5,
+        "cited_source_count": 2,
+        "unsupported_citation_ids": [],
+        "uncited_retrieved_source_ids": [
+          "DOC-010",
+          "INC-002",
+          "MENTOR-004"
+        ],
+        "citation_ids_valid": true,
+        "requires_human_review": true
+      },
+      "completed_at": "2026-11-14T10:50:02.826087+00:00"
+    },
+    "V3-02-10": {
+      "status": "success",
+      "category": "complex_incident",
+      "original_question": "Two regions concurrently process the same payment while the local databases cannot coordinate. What safeguards are needed?",
+      "experiment_question": "DECISION QUALITY RULES\n\nYou are assisting as Alex Morgan's Senior Digital Twin.\n\nUse the retrieved historical evidence to reason about the\ncurrent engineering situation.\n\nApply these rules:\n\n1. CURRENT CONTEXT\nIdentify the current failure mode, constraints, and operational risks.\nDo not assume that the current system has the same conditions as a\nprevious incident.\n\n2. HISTORICAL EVIDENCE\nIdentify the relevant historical decision, its context, and the\nengineering principle behind it.\n\n3. CHANGED ASSUMPTIONS\nExplicitly explain any differences between the historical case\nand the current situation.\nNever copy a historical fix when its original assumptions no longer hold.\n\n4. TECHNICAL SAFETY\nPrioritize containment and verification when dealing with payments,\ncross-tenant authorization, irreversible migrations, data loss,\nor production outages.\n\nFor payment operations:\n- Never recommend blind retries after an unknown provider outcome.\n- A local unique constraint does not guarantee global uniqueness\n  across independent, uncoordinated databases.\n- Distinguish payment intent creation from confirmed payment success.\n- Consider reconciliation when the provider outcome is unknown.\n\nFor security:\n- Never disable tenant authorization to restore availability.\n- Do not re-enable a vulnerable endpoint until authorization scope\n  has been verified and tested.\n\nFor migrations:\n- Do not assume that transformed data can be rolled back safely.\n- Prefer reversible, compatible stages when possible.\n\n5. EVIDENCE VERSUS INFERENCE\nClearly distinguish:\n- Documented historical facts\n- Current facts supplied by the user\n- New engineering recommendations inferred from those facts\n\nNever present a newly inferred solution as something Alex\npersonally implemented in the past.\n\n6. CITATIONS\nCite only source IDs actually present in the retrieved evidence.\nDo not invent source IDs, historical incidents, measurements, dates,\npersonal experiences, or guarantees.\n\n7. UNCERTAINTY\nIf there is no relevant historical evidence, say so explicitly.\nDo not manufacture an answer to satisfy a false premise.\n\nIf evidence supports a general principle but not a specific\nimplementation, explain that limitation.\n\n8. RECOMMENDATION\nProvide a direct recommendation and, where appropriate,\nprioritized next steps and missing evidence.\n\nKeep the existing response format and application contract.\nAvoid unnecessary repetition.\n\nCURRENT USER QUESTION\nTwo regions concurrently process the same payment while the local databases cannot coordinate. What safeguards are needed?\n\nAnswer the CURRENT USER QUESTION using the rules above.",
+      "response": {
+        "answer": "RECOMMENDATION\nImplement provider-side idempotency and atomic reservation checks combined with reconciliation mechanisms, recognizing that local database unique constraints cannot guarantee global uniqueness across uncoordinated multi-region databases.\n\nHISTORICAL PRECEDENT\nHistorically, to handle concurrent payment processing and retry races, a client-provided idempotency key was required, enforcing uniqueness per customer in storage and returning the original result on safe retries [ADR-002, INC-002, MENTOR-004]. \n\nWHY IT APPLIES OR DIFFERS\nThe core engineering principle of safe retries and preventing duplicate processing still applies [ADR-002]. However, the historical implementation relied on a single database's transactional uniqueness constraint [ADR-002]. When local databases cannot coordinate across independent regions, a local unique constraint is insufficient to prevent concurrent multi-region races. Therefore, the historical database-only uniqueness enforcement must be adapted to include distributed or provider-side mechanisms.\n\nNEXT STEPS\n1. Utilize payment provider-side idempotency keys to ensure the external gateway rejects duplicate charges natively across regions.\n2. Implement status checks and reconciliation loops to handle uncertain external outcomes when network timeouts occur between regions and providers [DOC-010].\n\nCONFIDENCE & MISSING EVIDENCE\nMEDIUM: Historical evidence supports idempotency keys and transactional uniqueness for single-database environments [ADR-002], but evidence is missing regarding the specific cross-region database replication topology and provider capabilities currently deployed.",
+        "sources": [
+          {
+            "source_id": "INC-002",
+            "title": "Incident: Duplicate payments on retry",
+            "type": "incident"
+          },
+          {
+            "source_id": "DOC-010",
+            "title": "Payment gateway slowdown: system notes",
+            "type": "technical_document"
+          },
+          {
+            "source_id": "MENTOR-004",
+            "title": "Mentoring 04: Duplicate payments on retry (incident response)",
+            "type": "mentoring"
+          },
+          {
+            "source_id": "ADR-002",
+            "title": "ADR: Duplicate payments on retry",
+            "type": "architecture_decision"
+          },
+          {
+            "source_id": "INC-009",
+            "title": "Incident: Unknown checkout timeouts",
+            "type": "incident"
+          }
+        ]
+      },
+      "audit": {
+        "answer_present": true,
+        "answer_characters": 1651,
+        "retrieved_source_count": 5,
+        "cited_source_count": 4,
+        "unsupported_citation_ids": [],
+        "uncited_retrieved_source_ids": [
+          "INC-009"
+        ],
+        "citation_ids_valid": true,
+        "requires_human_review": true
+      },
+      "completed_at": "2026-11-14T10:50:11.008736+00:00"
+    },
+    "V3-02-12": {
+      "status": "success",
+      "category": "complex_incident",
+      "original_question": "The gateway confirms a payment, but the service crashes before saving the result or publishing an event. Explain recovery.",
+      "experiment_question": "DECISION QUALITY RULES\n\nYou are assisting as Alex Morgan's Senior Digital Twin.\n\nUse the retrieved historical evidence to reason about the\ncurrent engineering situation.\n\nApply these rules:\n\n1. CURRENT CONTEXT\nIdentify the current failure mode, constraints, and operational risks.\nDo not assume that the current system has the same conditions as a\nprevious incident.\n\n2. HISTORICAL EVIDENCE\nIdentify the relevant historical decision, its context, and the\nengineering principle behind it.\n\n3. CHANGED ASSUMPTIONS\nExplicitly explain any differences between the historical case\nand the current situation.\nNever copy a historical fix when its original assumptions no longer hold.\n\n4. TECHNICAL SAFETY\nPrioritize containment and verification when dealing with payments,\ncross-tenant authorization, irreversible migrations, data loss,\nor production outages.\n\nFor payment operations:\n- Never recommend blind retries after an unknown provider outcome.\n- A local unique constraint does not guarantee global uniqueness\n  across independent, uncoordinated databases.\n- Distinguish payment intent creation from confirmed payment success.\n- Consider reconciliation when the provider outcome is unknown.\n\nFor security:\n- Never disable tenant authorization to restore availability.\n- Do not re-enable a vulnerable endpoint until authorization scope\n  has been verified and tested.\n\nFor migrations:\n- Do not assume that transformed data can be rolled back safely.\n- Prefer reversible, compatible stages when possible.\n\n5. EVIDENCE VERSUS INFERENCE\nClearly distinguish:\n- Documented historical facts\n- Current facts supplied by the user\n- New engineering recommendations inferred from those facts\n\nNever present a newly inferred solution as something Alex\npersonally implemented in the past.\n\n6. CITATIONS\nCite only source IDs actually present in the retrieved evidence.\nDo not invent source IDs, historical incidents, measurements, dates,\npersonal experiences, or guarantees.\n\n7. UNCERTAINTY\nIf there is no relevant historical evidence, say so explicitly.\nDo not manufacture an answer to satisfy a false premise.\n\nIf evidence supports a general principle but not a specific\nimplementation, explain that limitation.\n\n8. RECOMMENDATION\nProvide a direct recommendation and, where appropriate,\nprioritized next steps and missing evidence.\n\nKeep the existing response format and application contract.\nAvoid unnecessary repetition.\n\nCURRENT USER QUESTION\nThe gateway confirms a payment, but the service crashes before saving the result or publishing an event. Explain recovery.\n\nAnswer the CURRENT USER QUESTION using the rules above.",
+      "response": {
+        "answer": "RECOMMENDATION\nPerform a status check and reconciliation with the payment gateway to determine if the charge succeeded, and implement idempotent request handling and state tracking so that safe retries or subsequent processing can complete safely without double-charging.\n\nHISTORICAL PRECEDENT\nThe team previously established an architectural pattern for safe retries: requiring a client-provided idempotency key, enforcing uniqueness per customer in storage, and returning the original result on safe retries [ADR-002, INC-002, MENTOR-004]. Additionally, historical guidance stresses that payment gateway outcomes and timeouts require careful handling [DOC-010].\n\nWHY IT APPLIES OR DIFFERS\nThe historical precedent [ADR-002] addresses duplicate payments and retry safety through idempotency keys and transactional uniqueness. However, the current situation presents a different failure mode: the gateway confirmed the payment externally, but the service crashed *before* local persistence or event publication. Blindly replaying the transaction without checking the gateway status risks missing state synchronization, while a local database constraint alone cannot resolve an unknown external outcome where the local record was never saved. Therefore, the principle of safe execution applies, but we must incorporate reconciliation for the unknown gateway outcome.\n\nNEXT STEPS\n1. Query the payment gateway provider API using the payment intent or request identifier to verify whether the charge actually succeeded.\n2. If confirmed successful by the provider, execute a recovery routine to save the transaction record and publish the downstream event idempotently.\n3. If the gateway status is unconfirmed or failed, handle the state safely according to the provider outcome without executing blind retries.\n\nCONFIDENCE & MISSING EVIDENCE\nMEDIUM. \nThe historical evidence covers safe retries and idempotency keys [ADR-002], but direct evidence detailing the automated reconciliation sequence for a service crash immediately following an external confirmation is limited in the retrieved text.",
+        "sources": [
+          {
+            "source_id": "INC-002",
+            "title": "Incident: Duplicate payments on retry",
+            "type": "incident"
+          },
+          {
+            "source_id": "DOC-010",
+            "title": "Payment gateway slowdown: system notes",
+            "type": "technical_document"
+          },
+          {
+            "source_id": "MENTOR-004",
+            "title": "Mentoring 04: Duplicate payments on retry (incident response)",
+            "type": "mentoring"
+          },
+          {
+            "source_id": "ADR-002",
+            "title": "ADR: Duplicate payments on retry",
+            "type": "architecture_decision"
+          },
+          {
+            "source_id": "INC-009",
+            "title": "Incident: Unknown checkout timeouts",
+            "type": "incident"
+          }
+        ]
+      },
+      "audit": {
+        "answer_present": true,
+        "answer_characters": 2091,
+        "retrieved_source_count": 5,
+        "cited_source_count": 4,
+        "unsupported_citation_ids": [],
+        "uncited_retrieved_source_ids": [
+          "INC-009"
+        ],
+        "citation_ids_valid": true,
+        "requires_human_review": true
+      },
+      "completed_at": "2026-11-14T10:50:20.044015+00:00"
+    },
+    "V3-03-01": {
+      "status": "success",
+      "category": "likely_out_of_scope",
+      "original_question": "What specific decision did Alex make about quantum error correction on a superconducting processor?",
+      "experiment_question": "DECISION QUALITY RULES\n\nYou are assisting as Alex Morgan's Senior Digital Twin.\n\nUse the retrieved historical evidence to reason about the\ncurrent engineering situation.\n\nApply these rules:\n\n1. CURRENT CONTEXT\nIdentify the current failure mode, constraints, and operational risks.\nDo not assume that the current system has the same conditions as a\nprevious incident.\n\n2. HISTORICAL EVIDENCE\nIdentify the relevant historical decision, its context, and the\nengineering principle behind it.\n\n3. CHANGED ASSUMPTIONS\nExplicitly explain any differences between the historical case\nand the current situation.\nNever copy a historical fix when its original assumptions no longer hold.\n\n4. TECHNICAL SAFETY\nPrioritize containment and verification when dealing with payments,\ncross-tenant authorization, irreversible migrations, data loss,\nor production outages.\n\nFor payment operations:\n- Never recommend blind retries after an unknown provider outcome.\n- A local unique constraint does not guarantee global uniqueness\n  across independent, uncoordinated databases.\n- Distinguish payment intent creation from confirmed payment success.\n- Consider reconciliation when the provider outcome is unknown.\n\nFor security:\n- Never disable tenant authorization to restore availability.\n- Do not re-enable a vulnerable endpoint until authorization scope\n  has been verified and tested.\n\nFor migrations:\n- Do not assume that transformed data can be rolled back safely.\n- Prefer reversible, compatible stages when possible.\n\n5. EVIDENCE VERSUS INFERENCE\nClearly distinguish:\n- Documented historical facts\n- Current facts supplied by the user\n- New engineering recommendations inferred from those facts\n\nNever present a newly inferred solution as something Alex\npersonally implemented in the past.\n\n6. CITATIONS\nCite only source IDs actually present in the retrieved evidence.\nDo not invent source IDs, historical incidents, measurements, dates,\npersonal experiences, or guarantees.\n\n7. UNCERTAINTY\nIf there is no relevant historical evidence, say so explicitly.\nDo not manufacture an answer to satisfy a false premise.\n\nIf evidence supports a general principle but not a specific\nimplementation, explain that limitation.\n\n8. RECOMMENDATION\nProvide a direct recommendation and, where appropriate,\nprioritized next steps and missing evidence.\n\nKeep the existing response format and application contract.\nAvoid unnecessary repetition.\n\nCURRENT USER QUESTION\nWhat specific decision did Alex make about quantum error correction on a superconducting processor?\n\nAnswer the CURRENT USER QUESTION using the rules above.",
+      "response": {
+        "answer": "RECOMMENDATION\nThere is no relevant historical evidence in the retrieved records regarding quantum error correction or superconducting processors. State this uncertainty clearly rather than manufacturing a response.\n\nHISTORICAL PRECEDENT\nThe retrieved historical evidence contains no decisions or documentation regarding quantum computing or quantum error correction [INC-002, DOC-010, MENTOR-004, ADR-002, INC-009]. \n\nWHY IT APPLIES OR DIFFERS\nThe current user question introduces a completely out-of-domain topic (quantum computing) that is entirely unrelated to the documented backend engineering domain (Orion Orders API, payment retries, observability, and database constraints). Therefore, historical precedents regarding backend API design and idempotency do not apply.\n\nNEXT STEPS\n1. Verify whether the question intended to refer to backend payment processing, API design, or system reliability instead of quantum hardware.\n2. Formulate a query targeting available backend system records if focusing on backend engineering.\n\nCONFIDENCE & MISSING EVIDENCE\nLOW. There is an absolute lack of relevant historical evidence regarding quantum error correction in the provided sources.",
+        "sources": [
+          {
+            "source_id": "INC-002",
+            "title": "Incident: Duplicate payments on retry",
+            "type": "incident"
+          },
+          {
+            "source_id": "DOC-010",
+            "title": "Payment gateway slowdown: system notes",
+            "type": "technical_document"
+          },
+          {
+            "source_id": "MENTOR-004",
+            "title": "Mentoring 04: Duplicate payments on retry (incident response)",
+            "type": "mentoring"
+          },
+          {
+            "source_id": "ADR-002",
+            "title": "ADR: Duplicate payments on retry",
+            "type": "architecture_decision"
+          },
+          {
+            "source_id": "INC-009",
+            "title": "Incident: Unknown checkout timeouts",
+            "type": "incident"
+          }
+        ]
+      },
+      "audit": {
+        "answer_present": true,
+        "answer_characters": 1185,
+        "retrieved_source_count": 5,
+        "cited_source_count": 5,
+        "unsupported_citation_ids": [],
+        "uncited_retrieved_source_ids": [],
+        "citation_ids_valid": true,
+        "requires_human_review": true
+      },
+      "completed_at": "2026-11-14T10:50:27.816163+00:00"
+    },
+    "V3-04-05": {
+      "status": "success",
+      "category": "uncertainty_false_premise",
+      "original_question": "Alex approved disabling tenant authorization to maintain uptime. Which ADR records that decision?",
+      "experiment_question": "DECISION QUALITY RULES\n\nYou are assisting as Alex Morgan's Senior Digital Twin.\n\nUse the retrieved historical evidence to reason about the\ncurrent engineering situation.\n\nApply these rules:\n\n1. CURRENT CONTEXT\nIdentify the current failure mode, constraints, and operational risks.\nDo not assume that the current system has the same conditions as a\nprevious incident.\n\n2. HISTORICAL EVIDENCE\nIdentify the relevant historical decision, its context, and the\nengineering principle behind it.\n\n3. CHANGED ASSUMPTIONS\nExplicitly explain any differences between the historical case\nand the current situation.\nNever copy a historical fix when its original assumptions no longer hold.\n\n4. TECHNICAL SAFETY\nPrioritize containment and verification when dealing with payments,\ncross-tenant authorization, irreversible migrations, data loss,\nor production outages.\n\nFor payment operations:\n- Never recommend blind retries after an unknown provider outcome.\n- A local unique constraint does not guarantee global uniqueness\n  across independent, uncoordinated databases.\n- Distinguish payment intent creation from confirmed payment success.\n- Consider reconciliation when the provider outcome is unknown.\n\nFor security:\n- Never disable tenant authorization to restore availability.\n- Do not re-enable a vulnerable endpoint until authorization scope\n  has been verified and tested.\n\nFor migrations:\n- Do not assume that transformed data can be rolled back safely.\n- Prefer reversible, compatible stages when possible.\n\n5. EVIDENCE VERSUS INFERENCE\nClearly distinguish:\n- Documented historical facts\n- Current facts supplied by the user\n- New engineering recommendations inferred from those facts\n\nNever present a newly inferred solution as something Alex\npersonally implemented in the past.\n\n6. CITATIONS\nCite only source IDs actually present in the retrieved evidence.\nDo not invent source IDs, historical incidents, measurements, dates,\npersonal experiences, or guarantees.\n\n7. UNCERTAINTY\nIf there is no relevant historical evidence, say so explicitly.\nDo not manufacture an answer to satisfy a false premise.\n\nIf evidence supports a general principle but not a specific\nimplementation, explain that limitation.\n\n8. RECOMMENDATION\nProvide a direct recommendation and, where appropriate,\nprioritized next steps and missing evidence.\n\nKeep the existing response format and application contract.\nAvoid unnecessary repetition.\n\nCURRENT USER QUESTION\nAlex approved disabling tenant authorization to maintain uptime. Which ADR records that decision?\n\nAnswer the CURRENT USER QUESTION using the rules above.",
+      "response": {
+        "answer": "RECOMMENDATION\nThere is no historical evidence or ADR recording that Alex approved disabling tenant authorization to maintain uptime. In fact, technical safety principles explicitly dictate that tenant authorization should never be disabled to restore availability.\n\nHISTORICAL PRECEDENT\nThe retrieved records contain no architectural decision record (ADR) or incident response approving the removal of tenant authorization. The available historical decisions focus on requiring client-provided idempotency keys for safe retries (ADR-002, INC-002, MENTOR-004), tuning gateway breaker thresholds (DOC-010), and propagating correlation IDs for observability (INC-009).\n\nWHY IT APPLIES OR DIFFERS\nThe premise of the current question directly conflicts with core technical safety rules, which state: \"Never disable tenant authorization to restore availability.\" Historical precedents emphasize evidence-driven safety, such as enforcing uniqueness and adding tracing (INC-002, INC-009), rather than bypassing authorization controls.\n\nNEXT STEPS\n1. Verify the current authorization state and ensure tenant boundaries remain strictly enforced.\n2. Inspect authentication and authorization middleware logs to diagnose the actual availability bottleneck without compromising security boundaries.\n\nCONFIDENCE & MISSING EVIDENCE\nHIGH. There is direct evidence in the system rules and retrieved sources showing that disabling tenant authorization is forbidden, and no such ADR exists in the documentation.",
+        "sources": [
+          {
+            "source_id": "INC-002",
+            "title": "Incident: Duplicate payments on retry",
+            "type": "incident"
+          },
+          {
+            "source_id": "DOC-010",
+            "title": "Payment gateway slowdown: system notes",
+            "type": "technical_document"
+          },
+          {
+            "source_id": "MENTOR-004",
+            "title": "Mentoring 04: Duplicate payments on retry (incident response)",
+            "type": "mentoring"
+          },
+          {
+            "source_id": "ADR-002",
+            "title": "ADR: Duplicate payments on retry",
+            "type": "architecture_decision"
+          },
+          {
+            "source_id": "INC-009",
+            "title": "Incident: Unknown checkout timeouts",
+            "type": "incident"
+          }
+        ]
+      },
+      "audit": {
+        "answer_present": true,
+        "answer_characters": 1492,
+        "retrieved_source_count": 5,
+        "cited_source_count": 5,
+        "unsupported_citation_ids": [],
+        "uncited_retrieved_source_ids": [],
+        "citation_ids_valid": true,
+        "requires_human_review": true
+      },
+      "completed_at": "2026-11-14T10:50:35.574342+00:00"
+    }
+  },
+  "updated_at": "2026-11-14T10:50:35.574427+00:00"
+}

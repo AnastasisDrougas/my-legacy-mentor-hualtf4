@@ -1,0 +1,9 @@
+{
+  "dataset_sha256": "2589f96999dd53c813b08841f320213b89275fe650d9f3bd5f649b015e4b4415",
+  "corpus_sha256": "3ace82cb97d7958b12bb0c561355311505cf1e50d809df090a5a60234582800a",
+  "cases": 120,
+  "model_source": "Configured RAGPipeline LLM",
+  "created_utc": "2026-11-14T12:30:07.095131+00:00",
+  "status": "PROVISIONAL - generated references and qrels require manual review",
+  "scope": "held-out queries, NOT evidence holdout; data and persona remain the same"
+}
