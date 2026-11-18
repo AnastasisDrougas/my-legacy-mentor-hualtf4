@@ -3,11 +3,13 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    DATABASE_PATH=/app/data/knowledge_legacy.db
+    DATABASE_PATH=/app/data/knowledge_legacy.db \
+    UPLOAD_DIR=/app/data/uploads \
+    HF_HOME=/app/model_cache
 
 WORKDIR /app
 
-# Install Backend dependencies
+# Install Backend and AI dependencies
 COPY backend/requirements.txt ./requirements.txt
 
 RUN pip install --no-cache-dir -r requirements.txt
@@ -15,11 +17,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy Backend application
 COPY backend/app ./app
 
-# Prepare persistent data directory and non-root user
-RUN mkdir -p /app/data \
+# Copy AI module
+COPY ai ./ai
+
+# Prepare persistent storage and model cache
+RUN mkdir -p \
+    /app/data/uploads \
+    /app/ai/storage/chroma \
+    /app/model_cache \
     && useradd --create-home --uid 10001 appuser \
     && chown -R appuser:appuser /app
 
+# Run as non-root user
 USER appuser
 
 EXPOSE 8000

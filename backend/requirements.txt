@@ -4,6 +4,16 @@ uvicorn==0.34.2
 pydantic==2.14.3
 python-multipart==0.0.34
 
+# AI / RAG
+chromadb==1.5.9
+sentence-transformers==6.3.0
+transformers==5.23.0
+torch==2.15.0
+python-dotenv==1.2.4
+pypdf==7.1.1
+
+# HTTP
+httpx==0.28.1
+
 # Testing
 pytest==9.2.0
-httpx==0.28.1

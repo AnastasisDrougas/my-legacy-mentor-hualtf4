@@ -1,5 +1,46 @@
 
 services:
+  ai-init:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: my-legacy-mentor:dev
+    environment:
+      HF_HOME: /app/model_cache
+    volumes:
+      - chroma_data:/app/ai/storage/chroma
+      - model_cache:/app/model_cache
+    command:
+      - python
+      - -c
+      - |
+        import chromadb
+        import subprocess
+        import sys
+
+        client = chromadb.PersistentClient(
+            path="/app/ai/storage/chroma"
+        )
+
+        try:
+            collection = client.get_collection("senior_knowledge")
+        except chromadb.errors.NotFoundError:
+            collection = None
+
+        if collection is not None and collection.count() > 0:
+            print(
+                f"Chroma already initialized: "
+                f"{collection.count()} chunks. Skipping ingestion.",
+                flush=True
+            )
+        else:
+            print("Chroma collection missing or empty. Running ingestion...", flush=True)
+            subprocess.run(
+                [sys.executable, "-m", "ai.ingestion"],
+                check=True
+            )
+    restart: "no"
+
   backend:
     build:
       context: .
@@ -11,9 +52,26 @@ services:
       APP_ENV: development
       BACKEND_HOST: 0.0.0.0
       BACKEND_PORT: 8000
+
       DATABASE_PATH: /app/data/knowledge_legacy.db
+      UPLOAD_DIR: /app/data/uploads
+      HF_HOME: /app/model_cache
+
       CORS_ORIGINS: http://localhost:8501
-      AI_PROVIDER: mock
+
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+
+    volumes:
+      - backend_data:/app/data
+      - chroma_data:/app/ai/storage/chroma
+      - model_cache:/app/model_cache
+
+    depends_on:
+      ai-init:
+        condition: service_completed_successfully
+
     restart: unless-stopped
 
   frontend:
@@ -25,7 +83,14 @@ services:
       - "8501:8501"
     environment:
       BACKEND_URL: http://backend:8000
+
     depends_on:
       backend:
         condition: service_healthy
+
     restart: unless-stopped
+
+volumes:
+  backend_data:
+  chroma_data:
+  model_cache:
