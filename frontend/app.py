@@ -1,895 +1,315 @@
+"""MyLegacyMentor — Netcompany-inspired Streamlit interface (Option B).
+
+Uses the existing backend_client contracts. Conversations and documents are
+persisted only by FastAPI; Streamlit session state is ephemeral presentation state.
+"""
 from __future__ import annotations
 
-import html as html_lib
+import html
+import re
+from pathlib import Path
 
 import streamlit as st
 
 from api.backend_client import (
-    BackendError, check_health, send_chat, list_conversations,
-    get_conversation, upload_document,
+    BackendError,
+    check_health,
+    get_conversation,
+    list_conversations,
+    send_chat,
+    upload_document,
 )
 
-APP_NAME = "My Legacy Mentor"
-
+APP_NAME = "MyLegacyMentor"
 MODES = {
     "ask": {
         "label": "Ask Senior",
-        "title": "Ask your Senior",
-        "description": (
-            "Get technical answers grounded in the Senior Engineer's "
-            "knowledge and experience."
-        ),
+        "heading": "Ask your Senior",
+        "description": "Get technical answers grounded in the Senior Engineer's knowledge and experience.",
     },
     "mentor": {
         "label": "Mentor Mode",
-        "title": "Learn with your Senior",
-        "description": (
-            "Explore problems through questions, explanations "
-            "and step-by-step guidance."
-        ),
+        "heading": "Learn with your Senior",
+        "description": "Explore technical challenges through mentoring, reasoning and guided next steps.",
     },
 }
-
-# ---------------------------------------------------------
-# Lucide icons (inline SVG, 24x24 grid, 1.75 stroke)
-# ---------------------------------------------------------
-
-_ICON_PATHS = {
-    "brain": (
-        '<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>'
-        '<path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>'
-        '<path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/>'
-        '<path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/>'
-        '<path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/>'
-        '<path d="M3.477 10.896a4 4 0 0 1 .585-.396"/>'
-        '<path d="M19.938 10.5a4 4 0 0 1 .585.396"/>'
-        '<path d="M6 18a4 4 0 0 1-1.967-.516"/>'
-        '<path d="M19.967 17.484A4 4 0 0 1 18 18"/>'
-    ),
-    "user": (
-        '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>'
-        '<circle cx="12" cy="7" r="4"/>'
-    ),
-    "wrench": (
-        '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77'
-        'a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 '
-        '7.94-7.94l-3.76 3.76z"/>'
-    ),
-    "graduation-cap": (
-        '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0'
-        'L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/>'
-        '<path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>'
-    ),
-    "message-square": (
-        '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'
-    ),
-    "info": (
-        '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>'
-    ),
+SECTION_LABELS = {
+    "RECOMMENDATION": "Recommendation",
+    "HISTORICAL PRECEDENT": "Historical precedent",
+    "WHY IT APPLIES OR DIFFERS": "Why it applies or differs",
+    "NEXT STEPS": "Next steps",
+    "CONFIDENCE & MISSING EVIDENCE": "Confidence & missing evidence",
+}
+TITLE_STOPWORDS = {
+    "a", "an", "the", "what", "which", "who", "why", "how", "when", "where", "is", "are",
+    "was", "were", "do", "does", "did", "should", "could", "would", "can", "you", "we",
+    "i", "me", "my", "our", "please", "tell", "about", "before", "after", "to", "of",
+    "in", "on", "for", "with", "and", "that", "this", "it", "be", "explain",
 }
 
-
-def icon(name: str, size: int = 16) -> str:
-    return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" '
-        'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" '
-        f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-        f"{_ICON_PATHS[name]}</svg>"
-    )
-
-
-def render_html(markup: str) -> None:
-    """Render raw HTML. Lines are joined so markdown never treats
-    indentation as a code block."""
-    compact = " ".join(line.strip() for line in markup.strip().splitlines())
-    st.markdown(compact, unsafe_allow_html=True)
-
-
-def esc(value: object) -> str:
-    return html_lib.escape(str(value))
-
-
+# Black "</>" code icon (assets/favicon.png, next to this file) replaces the old 🧠 emoji.
+_ICON_PATH = Path(__file__).parent / "assets" / "favicon.png"
 st.set_page_config(
     page_title=APP_NAME,
+    page_icon=str(_ICON_PATH) if _ICON_PATH.exists() else "💻",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ---------------------------------------------------------
-# Design system (Material Design 3 / Gemini Tonal Surfaces)
-# ---------------------------------------------------------
-
+# Styling based on the supplied Option B reference. The colors are inspired by
+# Netcompany's visual identity, not an official reproduced brand template.
 st.markdown(
     """
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap');
-
-        :root {
-            color-scheme: dark;
-
-            --bg: #131314;
-            --surface: #1e1f20;
-            --surface-muted: #282a2c;
-            --surface-hover: #333537;
-            --border: rgba(255, 255, 255, 0.06);
-            --border-strong: #444746;
-
-            --text: #e3e3e3;
-            --text-muted: #c4c7c5;
-            --text-subtle: #8e918f;
-
-            --accent: #8ab4f8;
-            --accent-hover: #aecbfa;
-            --accent-on: #041e49;
-            --accent-text: #a8c7fa;
-            --accent-soft: #004a77;
-            --ai-gradient: linear-gradient(74deg, #4285f4 0%, #9b72cb 50%, #d96570 100%);
-
-            --success: #81c995;
-            --success-bg: rgba(129, 201, 149, 0.14);
-            --warning: #fdd663;
-            --warning-bg: rgba(253, 214, 99, 0.14);
-            --error: #f28b82;
-            --error-bg: rgba(242, 139, 130, 0.14);
-            --info: #a8c7fa;
-            --info-bg: rgba(168, 199, 250, 0.10);
-
-            --s1: 4px;
-            --s2: 8px;
-            --s3: 12px;
-            --s4: 16px;
-            --s5: 24px;
-            --s6: 32px;
-
-            --r-sm: 12px;
-            --r-md: 16px;
-            --r-lg: 24px;
-            --r-pill: 9999px;
-
-            --ease: 200ms cubic-bezier(0.2, 0, 0, 1);
-            --font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-                    Roboto, 'Helvetica Neue', Arial, sans-serif;
-            --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-        }
-
-        /* ---------- Base ---------- */
-
-        html, body, .stApp,
-        .stApp button, .stApp input, .stApp textarea,
-        .stApp p, .stApp label, .stApp li,
-        .stApp h1, .stApp h2, .stApp h3, .stApp h4,
-        .stApp div[data-testid="stMarkdownContainer"],
-        .stApp span:not([data-testid="stIconMaterial"]) {
-            font-family: var(--font);
-        }
-
-        .stApp code, .stApp pre {
-            font-family: var(--font-mono);
-        }
-
-        .stApp {
-            background-color: var(--bg);
-            color: var(--text);
-            -webkit-font-smoothing: antialiased;
-        }
-
-        .stApp p, .stApp li, .stApp label {
-            color: var(--text);
-            font-size: 15px;
-            line-height: 1.65;
-        }
-
-        #MainMenu, footer,
-        [data-testid="stDecoration"],
-        [data-testid="stMainMenu"],
-        [data-testid="stToolbarActions"],
-        [data-testid="stAppDeployButton"],
-        .stAppDeployButton {
-            display: none !important;
-        }
-
-        header[data-testid="stHeader"] {
-            background: transparent;
-        }
-
-        /* Sidebar open / close controls */
-        [data-testid="stExpandSidebarButton"],
-        [data-testid="stSidebarCollapsedControl"],
-        [data-testid="stSidebarCollapseButton"] button {
-            color: var(--text-muted);
-            border-radius: var(--r-pill);
-            transition: background-color var(--ease), color var(--ease);
-        }
-
-        [data-testid="stExpandSidebarButton"]:hover,
-        [data-testid="stSidebarCollapseButton"] button:hover {
-            background-color: var(--surface-muted);
-            color: var(--text);
-        }
-
-        .block-container {
-            max-width: 800px;
-            padding: var(--s6) var(--s5) 8rem var(--s5);
-        }
-
-        hr {
-            border: 0;
-            border-top: 1px solid var(--border);
-            margin: var(--s4) 0;
-        }
-
-        [data-testid="stCaptionContainer"],
-        [data-testid="stCaptionContainer"] p {
-            color: var(--text-subtle);
-            font-size: 13px;
-            line-height: 1.5;
-        }
-
-        /* Keyboard focus */
-        .stApp button:focus-visible,
-        .stApp [role="radio"]:focus-visible,
-        .stApp summary:focus-visible,
-        .stApp a:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: 2px;
-        }
-
-        /* ---------- Sidebar ---------- */
-
-        [data-testid="stSidebar"] {
-            background-color: var(--surface);
-            border-right: none;
-        }
-
-        [data-testid="stSidebarUserContent"] {
-            padding: var(--s5) var(--s4) var(--s4) var(--s4);
-        }
-
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: var(--s3);
-            padding: 0 var(--s1);
-        }
-
-        .brand-mark {
-            width: 34px;
-            height: 34px;
-            border-radius: var(--r-pill);
-            background: var(--ai-gradient);
-            color: #ffffff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .brand-name {
-            color: var(--text);
-            font-size: 15px;
-            font-weight: 600;
-            letter-spacing: -0.01em;
-            line-height: 1.2;
-        }
-
-        .brand-sub {
-            color: var(--text-subtle);
-            font-size: 12px;
-            line-height: 1.3;
-        }
-
-        .section-label {
-            color: var(--text-subtle);
-            font-size: 11px;
-            font-weight: 500;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            margin: var(--s5) 0 var(--s2) var(--s2);
-        }
-
-        .profile-card {
-            display: flex;
-            gap: var(--s3);
-            align-items: flex-start;
-            background: var(--surface-muted);
-            border: none;
-            border-radius: var(--r-md);
-            padding: var(--s4);
-        }
-
-        .profile-avatar {
-            width: 36px;
-            height: 36px;
-            border-radius: var(--r-pill);
-            background: var(--surface-hover);
-            color: var(--text-muted);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .profile-title {
-            color: var(--text);
-            font-size: 14px;
-            font-weight: 600;
-            line-height: 1.3;
-        }
-
-        .profile-meta {
-            color: var(--text-muted);
-            font-size: 13px;
-            line-height: 1.45;
-            margin-top: var(--s1);
-        }
-
-        .note {
-            display: flex;
-            gap: var(--s2);
-            align-items: flex-start;
-            background: var(--info-bg);
-            color: var(--info);
-            border-radius: var(--r-md);
-            padding: var(--s3) var(--s4);
-            margin-top: var(--s3);
-            font-size: 12.5px;
-            line-height: 1.45;
-        }
-
-        .note svg { flex-shrink: 0; margin-top: 2px; }
-
-        /* Mode selector (Tonal Pills) */
-        [data-testid="stSidebar"] [role="radiogroup"] {
-            gap: var(--s1);
-        }
-
-        [data-testid="stSidebar"] [role="radiogroup"] label {
-            width: 100%;
-            padding: 10px var(--s4);
-            border-radius: var(--r-pill);
-            border: none;
-            transition: background-color var(--ease), color var(--ease);
-            cursor: pointer;
-        }
-
-        [data-testid="stSidebar"] [role="radiogroup"] label:hover {
-            background: var(--surface-muted);
-        }
-
-        [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
-            background: var(--accent-soft);
-        }
-
-        [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) p {
-            color: var(--accent-text);
-            font-weight: 600;
-        }
-
-        [data-testid="stSidebar"] [role="radiogroup"] label p {
-            font-size: 14px;
-            font-weight: 500;
-            color: var(--text-muted);
-        }
-
-        /* Buttons */
-        .stApp .stButton > button {
-            height: 40px;
-            min-height: 40px;
-            padding: 0 var(--s5);
-            border-radius: var(--r-pill);
-            border: none;
-            background: var(--surface-muted);
-            color: var(--text);
-            font-size: 14px;
-            font-weight: 500;
-            box-shadow: none;
-            transition: background-color var(--ease), color var(--ease);
-        }
-
-        .stApp .stButton > button p {
-            font-size: 14px;
-            font-weight: 500;
-            color: inherit;
-        }
-
-        .stApp .stButton > button:hover {
-            background: var(--surface-hover);
-            color: var(--text);
-        }
-
-        .stApp .stButton > button:active {
-            background: var(--border-strong);
-        }
-
-        .stApp .stButton > button:disabled {
-            background: rgba(40, 42, 44, 0.45);
-            color: var(--text-subtle);
-            cursor: not-allowed;
-        }
-
-        /* Status pill */
-        .status {
-            display: inline-flex;
-            align-items: center;
-            gap: var(--s2);
-            border-radius: var(--r-pill);
-            padding: 5px 14px 5px 12px;
-            font-size: 12.5px;
-            font-weight: 500;
-            line-height: 1.4;
-            margin-left: var(--s1);
-        }
-
-        .status .dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: currentColor;
-        }
-
-        .status.success { background: var(--success-bg); color: var(--success); }
-        .status.warning { background: var(--warning-bg); color: var(--warning); }
-        .status.error   { background: var(--error-bg);   color: var(--error); }
-
-        .sidebar-footer {
-            color: var(--text-subtle);
-            font-size: 12px;
-            margin-top: var(--s5);
-            padding-left: var(--s2);
-        }
-
-        /* ---------- Page header ---------- */
-
-        .page-header {
-            padding-bottom: var(--s4);
-            margin-bottom: var(--s5);
-            border-bottom: 1px solid var(--border);
-        }
-
-        .breadcrumb {
-            color: var(--text-subtle);
-            font-size: 13px;
-            margin-bottom: var(--s2);
-        }
-
-        .breadcrumb .sep { margin: 0 var(--s2); color: var(--border-strong); }
-        .breadcrumb .current { color: var(--accent-text); font-weight: 500; }
-
-        .page-title {
-            color: var(--text);
-            font-size: 28px;
-            font-weight: 600;
-            letter-spacing: -0.02em;
-            line-height: 1.25;
-            margin: 0 0 var(--s2) 0;
-            padding: 0;
-        }
-
-        .page-desc {
-            color: var(--text-muted) !important;
-            font-size: 15px;
-            line-height: 1.6;
-            margin: 0;
-            max-width: 640px;
-        }
-
-        /* ---------- Empty state ---------- */
-
-        .empty {
-            background: transparent;
-            border: none;
-            padding: var(--s3) 0 var(--s5) 0;
-            margin-bottom: var(--s2);
-        }
-
-        .empty-title {
-            background: linear-gradient(90deg, #8ab4f8 0%, #c58af9 55%, #e3e3e3 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            font-size: 24px;
-            font-weight: 600;
-            letter-spacing: -0.015em;
-            margin: 0 0 var(--s2) 0;
-            display: inline-block;
-        }
-
-        .empty-text {
-            color: var(--text-muted) !important;
-            margin: 0;
-            max-width: 580px;
-        }
-
-        .cap-card {
-            background: var(--surface);
-            border: none;
-            border-radius: var(--r-lg);
-            padding: var(--s5);
-            height: 100%;
-            transition: background-color var(--ease);
-        }
-
-        .cap-card:hover {
-            background: var(--surface-muted);
-        }
-
-        .cap-icon {
-            width: 36px;
-            height: 36px;
-            border-radius: var(--r-pill);
-            background: var(--surface-muted);
-            color: var(--accent-text);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: var(--s4);
-        }
-
-        .cap-card:hover .cap-icon {
-            background: var(--surface-hover);
-        }
-
-        .cap-title {
-            color: var(--text);
-            font-size: 15px;
-            font-weight: 600;
-            margin-bottom: var(--s2);
-        }
-
-        .cap-text {
-            color: var(--text-muted) !important;
-            font-size: 14px !important;
-            line-height: 1.55;
-            margin: 0;
-        }
-
-        .hint {
-            color: var(--text-subtle);
-            font-size: 13px;
-            margin-top: var(--s5);
-        }
-
-        /* ---------- Chat (Gemini Stream Style) ---------- */
-
-        [data-testid="stChatMessage"] {
-            background: transparent;
-            border: none;
-            border-radius: 0;
-            padding: var(--s3) 0;
-            margin-bottom: var(--s4);
-            gap: var(--s4);
-            align-items: flex-start;
-        }
-
-        /* User prompt: right-aligned soft pill bubble */
-        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
-            background: var(--surface-muted);
-            border-radius: 24px 24px 4px 24px;
-            padding: 14px 20px;
-            max-width: 82%;
-            margin-left: auto;
-            flex-direction: row-reverse;
-        }
-
-        [data-testid="stChatMessageAvatarUser"] {
-            background: var(--surface-hover);
-            color: var(--text);
-            border-radius: var(--r-pill);
-        }
-
-        [data-testid="stChatMessageAvatarAssistant"] {
-            background: var(--ai-gradient);
-            color: #ffffff;
-            border-radius: var(--r-pill);
-        }
-
-        [data-testid="stChatMessage"] p {
-            font-size: 15px;
-            line-height: 1.7;
-            color: var(--text);
-        }
-
-        [data-testid="stChatMessage"] code {
-            font-size: 13px;
-            background: var(--surface);
-            padding: 2px 6px;
-            border-radius: 6px;
-        }
-
-        [data-testid="stChatMessage"] pre {
-            background: var(--surface) !important;
-            border: none !important;
-            border-radius: var(--r-md) !important;
-            padding: var(--s4) !important;
-        }
-
-        /* Floating Pill Chat Input */
-        [data-testid="stBottom"] {
-            background: linear-gradient(180deg, rgba(19, 19, 20, 0) 0%, #131314 35%);
-            padding-top: var(--s4);
-        }
-
-        [data-testid="stBottom"] > div {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        [data-testid="stChatInput"] {
-            background: var(--surface);
-            border: 1px solid transparent;
-            border-radius: 28px;
-            box-shadow: none;
-            padding: 4px 8px;
-            transition: background-color var(--ease), border-color var(--ease);
-        }
-
-        [data-testid="stChatInput"]:focus-within {
-            background: var(--surface-muted);
-            border-color: var(--border-strong);
-            box-shadow: none;
-        }
-
-        [data-testid="stChatInput"] textarea {
-            font-size: 15px;
-            color: var(--text);
-        }
-
-        [data-testid="stChatInput"] textarea::placeholder {
-            color: var(--text-subtle);
-        }
-
-        [data-testid="stChatInput"] button {
-            background: var(--accent);
-            color: var(--accent-on);
-            border-radius: var(--r-pill);
-            transition: background-color var(--ease), transform var(--ease);
-        }
-
-        [data-testid="stChatInput"] button:hover:not(:disabled) {
-            background: var(--accent-hover);
-        }
-
-        [data-testid="stChatInput"] button:disabled {
-            background: transparent;
-            color: var(--text-subtle);
-        }
-
-        /* ---------- Sources ---------- */
-
-        div[data-testid="stExpander"] {
-            background: var(--surface);
-            border: none;
-            border-radius: var(--r-md);
-            margin-top: var(--s3);
-            overflow: hidden;
-        }
-
-        div[data-testid="stExpander"] summary {
-            padding: 10px var(--s4);
-            transition: background-color var(--ease);
-        }
-
-        div[data-testid="stExpander"] summary:hover {
-            background: var(--surface-muted);
-        }
-
-        div[data-testid="stExpander"] summary p {
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--accent-text);
-        }
-
-        .source {
-            padding: var(--s3) 0;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .source:last-child { border-bottom: 0; padding-bottom: 0; }
-        .source:first-child { padding-top: 0; }
-
-        .source-title {
-            color: var(--text);
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .source-index { color: var(--accent-text); margin-right: var(--s2); }
-
-        .source-meta {
-            color: var(--text-subtle);
-            font-size: 12px;
-            margin-top: 2px;
-        }
-
-        .source-excerpt {
-            color: var(--text-muted);
-            font-size: 13px;
-            line-height: 1.55;
-            margin-top: var(--s2);
-        }
-
-        /* ---------- Alerts and spinner ---------- */
-
-        [data-testid="stAlert"] {
-            background: var(--surface);
-            border-radius: var(--r-md);
-            border: none;
-        }
-
-        [data-testid="stSpinner"] p,
-        [data-testid="stSpinner"] {
-            color: var(--text-muted);
-            font-size: 14px;
-        }
-
-        /* ---------- Responsive ---------- */
-
-        @media (max-width: 900px) {
-            .block-container { padding: var(--s5) var(--s4) 7.5rem var(--s4); }
-            .page-title { font-size: 24px; }
-        }
-
-        @media (max-width: 640px) {
-            .block-container { padding: var(--s4) var(--s3) 7.5rem var(--s3); }
-            .page-title { font-size: 21px; }
-            [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
-                max-width: 92%;
-                padding: 12px 16px;
-            }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            * { transition: none !important; animation: none !important; }
-        }
-    </style>
-    """,
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+:root {
+  color-scheme:dark;
+  --background:#071b1a;
+  --sidebar:#071e1c;
+  --panel:#103431;
+  --panel-light:#16413d;
+  --panel-hover:#214b46;
+  --line:#28544e;
+  --coral:#ff6459;
+  --coral-light:#ff8177;
+  --white:#f6fcfc;
+  --muted:#b7c9c7;
+  --soft:#88a5a1;
+}
+html,body,.stApp,.stApp button,.stApp input,.stApp textarea,
+.stApp p,.stApp label,.stApp li,.stApp h1,.stApp h2,.stApp h3 {
+  font-family:'Plus Jakarta Sans',sans-serif;
+}
+.stApp {
+  color:var(--white);
+  background:radial-gradient(ellipse 90% 64% at 65% -20%, #10413d 0%, transparent 69%),var(--background);
+}
+#MainMenu,footer,[data-testid='stDecoration'],[data-testid='stToolbarActions'],
+[data-testid='stAppDeployButton'] {display:none!important;}
+header[data-testid='stHeader'] {background:transparent;}
+.block-container {max-width:1380px;padding:1.6rem 3.2rem 8rem 3.2rem;}
+[data-testid='stSidebar'] {background:var(--sidebar);border-right:1px solid #143a36;}
+[data-testid='stSidebarUserContent'] {padding:1.1rem 1.05rem 1.5rem;}
+.nc-logo {display:flex;align-items:center;gap:0.9rem;margin:0.5rem 0.25rem 2rem;}
+.nc-logo-mark {font-size:2.9rem;font-weight:800;transform:skew(-16deg);letter-spacing:-0.35rem;
+ color:var(--coral);line-height:1;white-space:nowrap;margin-right:0.5rem;}
+.nc-logo-name {color:var(--white);font-size:1.2rem;font-weight:800;letter-spacing:-0.035em;white-space:nowrap;}
+.nc-logo-caption {font-size:0.77rem;color:var(--muted);margin-top:0.18rem;}
+.nc-rule {height:1px;background:var(--line);margin:1rem 0 1.2rem;opacity:.75;}
+.nc-side-label {font-size:0.65rem;font-weight:700;letter-spacing:0.1em;color:#a1bbb7;
+ text-transform:uppercase;margin:1.2rem 0 0.6rem 0.52rem;}
+[data-testid='stSidebar'] .stButton>button {
+ background:transparent;color:var(--white);border:1px solid transparent;border-radius:9px;
+ padding:0.42rem 0.65rem;min-height:36px;height:auto;text-align:left;
+ justify-content:flex-start;font-size:0.81rem;font-weight:500;line-height:1.4;
+}
+[data-testid='stSidebar'] .stButton>button p {font-size:0.81rem;font-weight:500;color:inherit;}
+[data-testid='stSidebar'] .stButton>button:hover {background:#173e3a;border-color:#26534d;}
+[data-testid='stSidebar'] .stButton>button[kind='primary'] {
+ background:#24514b;border-left:3px solid var(--coral);font-weight:700;
+}
+.nc-profile {margin-top:1.5rem;padding:1.15rem 0.3rem 0.3rem;border-top:1px solid var(--line);
+ display:flex;gap:0.7rem;align-items:flex-start;}
+.nc-profile-circle {background:#24514c;border-radius:50%;width:35px;height:35px;
+ display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--white);}
+.nc-profile strong {color:var(--white);font-size:0.81rem;}
+.nc-profile p {font-size:0.72rem!important;line-height:1.5;color:var(--muted)!important;margin:0.2rem 0;}
+.nc-backend-status {color:#9ac6b2;font-size:0.73rem;margin:0.8rem 0.45rem 0;}
+.nc-backend-status.off {color:var(--coral-light);}
+.nc-breadcrumb {color:var(--muted);font-size:0.81rem;margin:0 0 1.8rem;}
+.nc-breadcrumb strong {color:var(--coral);font-weight:700;}
+.nc-heading {display:flex;align-items:center;gap:1.5rem;margin:0.3rem 0 0.6rem;}
+.nc-slash {height:46px;width:10px;background:var(--coral);transform:skew(-22deg);border-radius:1px;flex-shrink:0;}
+.nc-heading h1 {color:var(--white);font-size:2.65rem;font-weight:800;letter-spacing:-0.055em;
+ line-height:1.16;margin:0;}
+.nc-description {color:var(--muted);font-size:0.96rem;line-height:1.6;margin:0 0 1.15rem 3.1rem;}
+/* Real, clickable Streamlit radio buttons form the segmented mode selector. */
+[data-testid='stMain'] [data-testid='stRadio'] {margin-left:0.1rem;margin-bottom:0.45rem;}
+[data-testid='stMain'] [data-testid='stRadio'] [role='radiogroup'] {gap:0;display:flex;flex-wrap:wrap;}
+[data-testid='stMain'] [data-testid='stRadio'] [role='radiogroup'] label {
+ background:#0f2a28;border:1px solid #2f5853;border-radius:12px;
+ padding:0.58rem 1.4rem;min-width:175px;justify-content:center;cursor:pointer;
+}
+[data-testid='stMain'] [data-testid='stRadio'] [role='radiogroup'] label:has(input:checked) {
+ background:linear-gradient(110deg,#bc5148,var(--coral));border-color:var(--coral);
+}
+[data-testid='stMain'] [data-testid='stRadio'] [role='radiogroup'] label p {font-size:0.89rem;color:var(--white);font-weight:700;}
+[data-testid='stMain'] [data-testid='stRadio'] [role='radiogroup'] label:has(input:checked) p {color:var(--white);}
+.nc-main-rule {height:1px;background:var(--line);opacity:.85;margin:0.4rem 0 1.8rem;}
+.nc-welcome {position:relative;padding:0.5rem 0 0.6rem;}
+.nc-eyebrow {font-size:0.71rem;color:var(--muted);font-weight:700;letter-spacing:0.12em;}
+.nc-welcome h2 {font-weight:800;font-size:2.35rem;line-height:1.18;letter-spacing:-0.045em;
+ color:var(--white);margin:0.6rem 0;}
+.nc-welcome h2 span {color:var(--coral);}
+.nc-welcome p {font-size:0.95rem;color:var(--muted);line-height:1.65;max-width:780px;}
+[data-testid='stMain'] .stButton>button {background:#1a4943;color:var(--white);
+ border:1px solid #37635e;border-radius:9px;font-size:0.8rem;min-height:36px;}
+[data-testid='stMain'] .stButton>button:hover {background:#285a53;border-color:var(--coral);}
+.nc-conversation-label {font-size:0.75rem;font-weight:700;letter-spacing:0.08em;
+ color:var(--muted);text-transform:uppercase; margin-bottom:1rem;}
+[data-testid='stChatMessage'] {background:transparent;border:0;padding:0.8rem 0;}
+[data-testid='stChatMessageAvatarAssistant'] {background:var(--coral);color:#17302c;border-radius:10px;}
+[data-testid='stChatMessageAvatarUser'] {background:#20534d;color:var(--white);border-radius:10px;}
+[data-testid='stChatMessage'] p,[data-testid='stChatMessage'] li {color:var(--white);line-height:1.65;}
+[data-testid='stVerticalBlockBorderWrapper']>div {border-color:#305a55!important;border-radius:14px!important;}
+.nc-answer-heading {font-size:0.86rem;font-weight:800;color:var(--coral);}
+.nc-answer-sub {color:var(--muted);font-size:0.72rem;margin:0.2rem 0 0.75rem;}
+.nc-answer-section {font-size:0.91rem;font-weight:800;color:var(--coral);margin:0.9rem 0 0.23rem;}
+[data-testid='stExpander'] {background:#123734;border:1px solid #2a5953;border-radius:12px;}
+.nc-source-name {color:var(--white);font-size:0.82rem;font-weight:700;}
+.nc-source-meta {color:var(--muted);font-size:0.71rem;margin:0.2rem 0 0.65rem;}
+[data-testid='stBottom'] {background:linear-gradient(0deg,#071b1a 58%,transparent);}
+[data-testid='stChatInput'] {background:#103b36;border:1px solid #3a7770;border-radius:13px;}
+[data-testid='stChatInput']:focus-within {border-color:var(--coral);}
+[data-testid='stChatInput'] button {color:var(--coral);}
+[data-testid='stAlert'] {border-radius:10px;}
+[data-testid='stFileUploader'] {background:transparent;}
+@media(max-width:1100px) {.block-container{padding:1.4rem 1.5rem 7.5rem;}.nc-heading h1{font-size:2.1rem;}}
+@media(max-width:640px) {.block-container{padding:1rem 0.8rem 7rem;}.nc-heading h1{font-size:1.75rem;}
+.nc-description{margin-left:0;}.nc-welcome h2{font-size:1.7rem;}}
+</style>
+""",
     unsafe_allow_html=True,
 )
 
-# ---------------------------------------------------------
-# Session state
-# ---------------------------------------------------------
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "conversation_id" not in st.session_state:
-    st.session_state.conversation_id = None
-if "mode" not in st.session_state:
-    st.session_state.mode = "ask"
+def html_block(markup: str) -> None:
+    """Present static layout HTML (all dynamic values must be escaped)."""
+    st.markdown(" ".join(line.strip() for line in markup.splitlines()), unsafe_allow_html=True)
 
 
-def reset_conversation() -> None:
-    """Start an unsaved chat; existing conversation stays on the Backend."""
-    st.session_state.conversation_id = None
-    st.session_state.messages = []
+def esc(value: object) -> str:
+    return html.escape(str(value), quote=True)
 
 
-def open_conversation(conversation_id: str) -> None:
-    """Load canonical history from FastAPI; never store it locally."""
-    data = get_conversation(conversation_id)
-    messages = data["messages"]
-    st.session_state.conversation_id = conversation_id
-    st.session_state.messages = messages
-    # The Ask/Mentor selection remains unchanged when opening history.
-    # Streamlit does not allow changing a radio widget's session_state key
-    # after the widget has been created during the same script run.
-    # Messages retain their original modes for display; the user controls
-    # the mode for the next request via the sidebar radio.
+def title_from_question(question: str) -> str:
+    """Create a short title from a question; never call another LLM or store locally."""
+    words = re.findall(r"[^\W_]+(?:[-'][^\W_]+)*", question, flags=re.UNICODE)
+    keywords = [word for word in words if word.casefold() not in TITLE_STOPWORDS]
+    chosen = (keywords or words)[:4]
+    return " ".join(chosen).capitalize() if chosen else "Previous conversation"
+
+
+def split_answer(answer: str) -> tuple[str, list[tuple[str, str]]]:
+    """Recognize existing RAG section headings; preserve all unmatched answer text."""
+    intro: list[str] = []
+    sections: list[tuple[str, str]] = []
+    current_label: str | None = None
+    current_lines: list[str] = []
+    for line in answer.replace("\r\n", "\n").splitlines():
+        normalized = re.sub(r"^#{1,6}\s*", "", line.strip()).rstrip(":").upper()
+        if normalized in SECTION_LABELS:
+            if current_label is not None:
+                sections.append((current_label, "\n".join(current_lines).strip()))
+            current_label = SECTION_LABELS[normalized]
+            current_lines = []
+        elif current_label is None:
+            intro.append(line)
+        else:
+            current_lines.append(line)
+    if current_label is not None:
+        sections.append((current_label, "\n".join(current_lines).strip()))
+    return "\n".join(intro).strip(), sections
 
 
 def render_sources(sources: list[dict]) -> None:
     if not sources:
         return
-    with st.expander(f"Knowledge sources ({len(sources)})"):
-        for index, source in enumerate(sources, start=1):
-            title = esc(source.get("title") or "Untitled source")
-            source_id = esc(source.get("source_id") or "N/A")
-            source_type = esc(source.get("type") or "Unknown")
-            render_html(
-                '<div class="source">'
-                f'<div class="source-title"><span class="source-index">{index}.</span>{title}</div>'
-                f'<div class="source-meta">{source_type} · Source ID: {source_id}</div>'
-                '</div>'
+    with st.expander(f"Knowledge sources ({len(sources)})", expanded=False):
+        for i, source in enumerate(sources, 1):
+            html_block(
+                f'<div class="nc-source-name">{i}. {esc(source.get("title") or "Untitled source")}</div>'
+                f'<div class="nc-source-meta">{esc(source.get("type") or "Unknown")} · '
+                f'Source ID: {esc(source.get("source_id") or "N/A")}</div>'
             )
+            if source.get("excerpt"):
+                st.caption(str(source["excerpt"]))
 
 
 def render_message(message: dict) -> None:
-    with st.chat_message(message["role"], avatar=message["role"]):
-        if message["role"] == "assistant":
-            mode = message.get("mode")
-            if mode in MODES:
-                st.caption("🎓 Mentor guidance" if mode == "mentor" else "🔧 Ask Senior answer")
-        st.markdown(message["content"])
-        render_sources(message.get("sources") or [])
+    role = message.get("role", "assistant")
+    role = role if role in ("user", "assistant") else "assistant"
+    content = str(message.get("content") or "")
+    with st.chat_message(role):
+        if role == "user":
+            st.markdown(content)
+            return
+        mode = message.get("mode", "ask")
+        with st.container(border=True):
+            html_block(
+                f'<div class="nc-answer-heading">{esc("Mentor Mode" if mode == "mentor" else "Ask Senior")}</div>'
+                '<div class="nc-answer-sub">MyLegacyMentor · Senior Digital Twin</div>'
+            )
+            intro, sections = split_answer(content)
+            if intro:
+                st.markdown(intro)
+            for heading, body in sections:
+                html_block(f'<div class="nc-answer-section">{esc(heading)}</div>')
+                if body:
+                    st.markdown(body)
+            render_sources(message.get("sources") or [])
 
 
-def status_pill(kind: str, text: str) -> None:
-    render_html(
-        f'<span class="status {kind}" role="status">'
-        f'<span class="dot"></span>{esc(text)}</span>'
-    )
+def new_conversation() -> None:
+    st.session_state.conversation_id = None
+    st.session_state.messages = []
 
 
-# ---------------------------------------------------------
-# Sidebar
-# ---------------------------------------------------------
+def open_conversation(cid: str) -> None:
+    # Backend is authoritative; avoid changing mode widget state after instantiation.
+    data = get_conversation(cid)
+    st.session_state.conversation_id = cid
+    st.session_state.messages = data["messages"]
 
+
+if "conversation_id" not in st.session_state:
+    st.session_state.conversation_id = None
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "mode_selector" not in st.session_state:
+    st.session_state.mode_selector = "ask"
+
+
+# Sidebar: backend-backed history, real uploads, compact senior profile.
 with st.sidebar:
-
-    render_html(
-        f"""
-        <div class="brand">
-            <div class="brand-mark">{icon("brain", 18)}</div>
-            <div>
-                <div class="brand-name">{APP_NAME}</div>
-                <div class="brand-sub">Senior Digital Twin</div>
-            </div>
-        </div>
-        """
+    html_block(
+        '<div class="nc-logo"><div class="nc-logo-mark">╱╱</div><div>'
+        '<div class="nc-logo-name">MyLegacyMentor</div>'
+        '<div class="nc-logo-caption">Senior Digital Twin</div></div></div>'
     )
-
-    render_html('<div class="section-label">Profile</div>')
-
-    render_html(
-        f"""
-        <div class="profile-card">
-            <div class="profile-avatar">{icon("user", 18)}</div>
-            <div>
-                <div class="profile-title">Senior Software Engineer</div>
-                <div class="profile-meta">
-                    Technical expertise, engineering decisions
-                    and mentoring experience.
-                </div>
-            </div>
-        </div>
-        <div class="note">
-            {icon("info", 16)}
-            <span>
-                The Senior persona profile will be populated
-                when AI persona integration is available.
-            </span>
-        </div>
-        """
-    )
-
-    render_html('<div class="section-label">Conversation mode</div>')
-
-    if "mode_selector" not in st.session_state:
-        st.session_state.mode_selector = st.session_state.mode
-    selected_mode = st.radio(
-        "Choose interaction style",
-        options=list(MODES),
-        format_func=lambda key: MODES[key]["label"],
-        index=list(MODES).index(st.session_state.mode),
-        label_visibility="collapsed",
-        key="mode_selector",
-    )
-
-    if selected_mode != st.session_state.mode:
-        st.session_state.mode = selected_mode
-        # Switching modes changes the NEXT request, not the active conversation.
+    if st.button("＋  New conversation", key="new_conversation", use_container_width=True):
+        new_conversation()
         st.rerun()
-
-    render_html('<div class="section-label">Conversations</div>')
-    if st.button("＋ New conversation", use_container_width=True):
-        reset_conversation()
-        st.rerun()
-
+    html_block('<div class="nc-side-label">Recent conversations</div>')
     try:
         conversations = list_conversations()
     except BackendError as exc:
-        st.warning("Conversation history is unavailable.")
-        st.caption(str(exc))
         conversations = []
-
+        st.warning("Conversation history unavailable")
+        st.caption(str(exc))
     if not conversations:
-        st.caption("No saved conversations yet.")
+        st.caption("No saved conversations yet")
+    # Only a temporary per-run cache: no local persistence or additional database.
     for conversation in conversations:
-        cid = conversation["id"]
-        stamp = (conversation.get("created_at") or "").replace("T", " ")[:16]
-        display = f"💬 {stamp or cid[:8]} · {cid[:8]}"
+        cid = conversation.get("id")
+        if not cid:
+            continue
+        try:
+            details = get_conversation(cid)
+            first_question = next(
+                (m.get("content", "") for m in details.get("messages", [])
+                 if m.get("role") == "user" and str(m.get("content", "")).strip()),
+                "",
+            )
+            title = title_from_question(first_question)
+        except BackendError:
+            title = "Previous conversation"
         if st.button(
-            display, key=f"history_{cid}", use_container_width=True,
+            title,
+            key=f"history_{cid}",
+            use_container_width=True,
             type="primary" if cid == st.session_state.conversation_id else "secondary",
+            help="Open saved conversation",
         ):
             try:
                 open_conversation(cid)
@@ -898,146 +318,91 @@ with st.sidebar:
             else:
                 st.rerun()
 
-    render_html('<div class="section-label">Documents</div>')
-    document = st.file_uploader("Upload a knowledge document", type=["txt", "md", "pdf"])
-    if document is not None and st.button("Upload document", use_container_width=True):
-        types = {"txt": "text/plain", "md": "text/markdown", "pdf": "application/pdf"}
-        extension = document.name.rsplit(".", 1)[-1].lower()
+    html_block('<div class="nc-rule"></div>')
+    html_block('<div class="nc-side-label">Knowledge documents</div>')
+    file = st.file_uploader(
+        "Upload document", type=["txt", "md", "pdf"], key="knowledge_upload",
+        help="TXT, Markdown or PDF. The Backend controls allowed size and ingestion.",
+    )
+    if file is not None and st.button("Upload selected document", use_container_width=True):
+        mime = {"txt": "text/plain", "md": "text/markdown", "pdf": "application/pdf"}
+        ext = file.name.rsplit(".", 1)[-1].lower()
         try:
             with st.spinner("Uploading document..."):
-                result = upload_document(document.name, document.getvalue(), types[extension])
-            st.success(f"Uploaded {result['filename']} (status: {result['status']}, ID: {result['id']})")
+                result = upload_document(file.name, file.getvalue(), mime[ext])
+            st.success(f"Uploaded {result['filename']} · status: {result['status']}")
             if result["status"] != "ready":
-                st.info("Upload accepted; availability in AI retrieval is not confirmed.")
+                st.info("Upload accepted; AI retrieval availability has not been verified yet.")
         except (BackendError, KeyError) as exc:
             st.error(f"Upload failed: {exc}")
 
-    render_html('<div class="section-label">System status</div>')
-
     try:
-        health = check_health()
-
-        if health.get("status") == "ok":
-            status_pill("success", "Backend connected")
-        else:
-            status_pill("warning", "Unexpected backend response")
-
+        connected = check_health().get("status") == "ok"
+        html_block(
+            '<div class="nc-backend-status{}">● {}</div>'.format(
+                "" if connected else " off", "Backend connected" if connected else "Backend unavailable"
+            )
+        )
     except BackendError:
-        status_pill("error", "Backend disconnected")
+        html_block('<div class="nc-backend-status off">● Backend disconnected</div>')
+    html_block(
+        '<div class="nc-profile"><div class="nc-profile-circle">♙</div><div>'
+        '<strong>Senior Software Engineer</strong>'
+        '<p>Technical expertise, engineering decisions and mentoring.</p></div></div>'
+    )
 
-    render_html(f'<div class="sidebar-footer">{APP_NAME} &middot; Prototype</div>')
 
-
-# ---------------------------------------------------------
-# Main interface
-# ---------------------------------------------------------
-
-mode_info = MODES[st.session_state.mode]
-
-render_html(
-    f"""
-    <div class="page-header">
-        <div class="breadcrumb">
-            Senior Digital Twin<span class="sep">/</span>
-            <span class="current">{mode_info['label']}</span>
-        </div>
-        <div class="page-title" role="heading" aria-level="1">{mode_info['title']}</div>
-        <p class="page-desc">{mode_info['description']}</p>
-    </div>
-    """
+# Main area: Option B header and genuine working Ask/Mentor selector.
+html_block('<div class="nc-breadcrumb">Senior Digital Twin &nbsp; › &nbsp; <strong>MyLegacyMentor</strong></div>')
+mode_info = MODES[st.session_state.mode_selector]
+html_block(
+    f'<div class="nc-heading"><div class="nc-slash"></div><h1>{esc(mode_info["heading"])}</h1></div>'
+    f'<div class="nc-description">{esc(mode_info["description"])}</div>'
 )
+mode = st.radio(
+    "Conversation mode",
+    options=["ask", "mentor"],
+    format_func=lambda value: MODES[value]["label"],
+    horizontal=True,
+    key="mode_selector",
+    label_visibility="collapsed",
+)
+html_block('<div class="nc-main-rule"></div>')
 
-# ---------------------------------------------------------
-# Empty state
-# ---------------------------------------------------------
-
+# Minimal welcome view: no preset questions or illustrative AI responses.
 if not st.session_state.messages:
-
-    render_html(
-        """
-        <div class="empty">
-            <div class="empty-title" role="heading" aria-level="2">Your Senior Engineer is available</div>
-            <p class="empty-text">
-                Access technical knowledge, engineering experience
-                and decision-making insights preserved through AI.
-            </p>
-        </div>
-        """
+    html_block(
+        '<div class="nc-welcome"><div class="nc-eyebrow">WELCOME TO MYLEGACYMENTOR</div>'
+        '<h2>Your Senior Engineer is <span>available</span></h2>'
+        '<p>Access technical knowledge, engineering experience and decision-making '
+        'insights preserved through AI.</p></div>'
     )
-
-    col1, col2 = st.columns(2, gap="medium")
-
-    with col1:
-        render_html(
-            f"""
-            <div class="cap-card">
-                <div class="cap-icon">{icon("wrench", 18)}</div>
-                <div class="cap-title">Technical problems</div>
-                <p class="cap-text">
-                    Understand architecture, debugging, incidents
-                    and engineering decisions.
-                </p>
-            </div>
-            """
-        )
-
-    with col2:
-        render_html(
-            f"""
-            <div class="cap-card">
-                <div class="cap-icon">{icon("graduation-cap", 18)}</div>
-                <div class="cap-title">Engineering guidance</div>
-                <p class="cap-text">
-                    Learn how an experienced engineer approaches
-                    complex technical challenges.
-                </p>
-            </div>
-            """
-        )
-
-    render_html(
-        '<div class="hint">'
-        "Start a conversation using the message field below."
-        "</div>"
-    )
-
-# ---------------------------------------------------------
-# Chat history
-# ---------------------------------------------------------
+else:
+    html_block('<div class="nc-conversation-label">Conversation</div>')
 
 for message in st.session_state.messages:
     render_message(message)
 
-
-# ---------------------------------------------------------
-# Chat input and response
-# ---------------------------------------------------------
-
 prompt = st.chat_input("Ask your Senior Engineer a technical question...")
-
 if prompt:
     pending = {"role": "user", "content": prompt}
     st.session_state.messages.append(pending)
     render_message(pending)
-    with st.chat_message("assistant", avatar="assistant"):
+    with st.chat_message("assistant"):
         with st.spinner("Generating response..."):
             try:
-                result = send_chat(
-                    prompt, st.session_state.mode, st.session_state.conversation_id
-                )
+                result = send_chat(prompt, mode, st.session_state.conversation_id)
                 st.session_state.conversation_id = result["conversation_id"]
-                answer_message = {
-                    "role": "assistant", "content": result["answer"],
-                    "mode": result["mode"], "sources": result["sources"],
-                }
-                st.session_state.messages.append(answer_message)
-                st.caption("🎓 Mentor guidance" if result["mode"] == "mentor" else "🔧 Ask Senior answer")
-                st.markdown(result["answer"])
-                render_sources(result["sources"])
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": result["answer"],
+                    "mode": result["mode"],
+                    "sources": result["sources"],
+                })
             except BackendError as exc:
-                # Failed exchanges are NOT persisted by the Backend. Do not fake saved history.
+                # Backend only persists successful exchanges.
                 st.session_state.messages.pop()
                 st.error("Unable to get a response from the Senior Digital Twin.")
                 st.caption(str(exc))
             else:
-                st.rerun()  # Refresh sidebar list and authoritative state
+                st.rerun()

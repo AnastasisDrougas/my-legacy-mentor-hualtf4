@@ -21,17 +21,15 @@ The goal is to help junior developers continue benefiting from accumulated engin
 
 ## 1. What Makes My Legacy Mentor a Digital Twin?
 
-My Legacy Mentor goes beyond conventional Retrieval-Augmented Generation (RAG).
+My Legacy Mentor is designed to preserve more than technical documents. It combines a Senior Engineer's documented knowledge with the principles and mentoring habits that shaped their engineering decisions.
 
-RAG is the foundation that connects the system to documented knowledge. The Digital Twin extends this foundation by incorporating the Senior Engineer's documented professional characteristics, historical decisions, recurring engineering principles, and mentoring approach.
+A conventional RAG system retrieves relevant information and uses it to answer a question. My Legacy Mentor adds a structured representation of **who the Senior Engineer is professionally, how they make decisions, and how they guide junior developers**.
 
-The system combines four complementary capabilities.
+The AI experience is built around four connected elements:
 
 ### 1.1 Personal Engineering Knowledge
 
-The Digital Twin builds its knowledge representation from engineering artifacts associated with a consistent synthetic Senior Engineer persona.
-
-These include:
+The knowledge base contains synthetic engineering records associated with one consistent Senior Engineer persona:
 
 - Architecture Decision Records (ADRs)
 - Technical documentation
@@ -40,171 +38,93 @@ These include:
 - Incidents and postmortems
 - Mentoring examples
 
-These artifacts capture not only technical outcomes, but also the historical context, reasoning, trade-offs, and lessons behind engineering decisions.
+The records preserve context, decisions, reasoning, trade-offs, and lessons learned. This gives the system concrete engineering precedents to retrieve instead of relying only on general model knowledge.
 
-### 1.2 Senior Engineer Persona Modeling
+### 1.2 Senior Engineer Persona
 
-My Legacy Mentor incorporates a structured Senior Engineer profile describing documented professional characteristics.
+A structured Senior Engineer profile provides a consistent professional perspective. It describes:
 
-The persona represents:
+- Engineering principles and technical preferences
+- Priorities such as correctness, reliability, and maintainability
+- Evidence-driven problem-solving
+- Risk tolerance and uncertainty handling
+- Communication style and mentoring philosophy
 
-- Engineering priorities and technical preferences
-- Risk awareness and uncertainty handling
-- Architectural decision-making principles
-- Evidence-based problem-solving
-- Technical trade-off evaluation
-- Communication and mentoring philosophy
-
-This provides a consistent professional perspective when responding to new engineering questions.
-
-For example, a Senior Engineer whose documented approach prioritizes measuring performance before changing architecture should apply that principle when discussing a new performance problem.
+The persona is used as contextual guidance at response time. It is not a fine-tuned copy of a person.
 
 ### 1.3 Engineering Decision Patterns
 
-The Digital Twin incorporates **12 extracted engineering decision patterns**, representing recurring principles identified across the Senior's historical records.
+My Legacy Mentor includes **12 extracted decision patterns** derived from the synthetic engineering records. They represent recurring principles such as measuring before optimizing, protecting backward compatibility, and limiting production risk.
 
-These patterns connect previous engineering experience to new technical situations.
+For example, historical database-performance records document a measurement-first approach: inspect query plans, compare realistic read and write performance, choose the smallest justified change, and keep a rollback path.
 
-**Example: Database performance**
+When a junior developer asks whether a slow query requires a database migration, the Digital Twin can connect the new problem to that precedent, explain the trade-offs, and identify which evidence is still missing.
 
-Historical experience:
+### 1.4 Two Ways to Use the Senior's Experience
 
-A slow order lookup was investigated through query-plan analysis, realistic performance measurements, and targeted query/index improvements rather than an immediate database migration.
+**Ask Senior** provides direct technical guidance: a recommendation, supporting reasoning, relevant historical sources, risks, and practical next steps.
 
-Extracted engineering principle:
+**Mentor Mode** takes a teaching-oriented approach: it can ask a diagnostic question, offer a hint, explain a trade-off, and help the developer reach a solution independently.
 
-> Prefer evidence-based, incremental improvements before introducing expensive architectural changes.
+> **Ask Mode helps address the current problem. Mentor Mode helps the developer build the reasoning needed for the next one.**
 
-New situation:
-
-A junior developer asks whether a slow query requires a database migration.
-
-Digital Twin behavior:
-
-The system can relate the problem to the historical precedent, explain the relevant trade-offs, identify missing performance evidence, and recommend a measurement-first investigation.
-
-The key capability is not merely retrieving a previous solution, but **using documented engineering judgment to interpret a new problem**.
-
-### 1.4 Personalized Mentoring Behavior
-
-My Legacy Mentor provides two distinct interaction modes.
-
-#### Ask Senior Mode
-
-Designed for developers who need direct technical recommendations.
-
-The Digital Twin provides:
-
-- Recommended technical approaches
-- Relevant historical engineering precedents
-- Reasoning behind recommendations
-- Technical risks and trade-offs
-- Supporting source references
-- Confidence and missing evidence
-- Practical next steps
-
-#### Mentor Mode
-
-Designed for junior developers who want to develop their engineering reasoning.
-
-Instead of immediately providing a complete solution, the Digital Twin:
-
-- Asks diagnostic questions
-- Offers contextual hints
-- Encourages independent investigation
-- Explains relevant engineering principles
-- Connects the problem with historical experience
-- Guides the developer toward a reasoned solution
-
-**Ask Mode helps solve the current problem. Mentor Mode helps developers learn how to solve future problems.**
+The Digital Twin represents documented professional behavior. It does not claim to reproduce every aspect of a real person or to possess personal experiences beyond the supplied evidence.
 
 ---
 
-## 2. Beyond Traditional RAG
+## 2. How My Legacy Mentor Extends RAG
 
-Traditional RAG typically follows this process:
+RAG remains the evidence-retrieval foundation. The additional value comes from combining retrieved records with the Senior profile, extracted decision patterns, and the selected interaction mode.
 
-```text
-User Question
-     |
-     v
-Retrieve Relevant Documents
-     |
-     v
-LLM Generates Answer
-     |
-     v
-Answer with Sources
+### 2.1 Building the Senior's Knowledge Context
+
+```mermaid
+flowchart TD
+    A["Synthetic engineering records<br/>ADRs · Docs · PRs · Commits · Incidents · Mentoring"] --> B["Ingestion and processing"]
+    B --> C["Sentence Transformer embeddings"]
+    C --> D[("ChromaDB<br/>Semantic knowledge retrieval")]
+    A --> E["Senior profile"]
+    A --> F["12 extracted decision patterns"]
+    E --> G["Structured Senior context"]
+    F --> G
 ```
 
-My Legacy Mentor extends this approach with Senior-specific context and behavioral guidance:
+The records provide the evidence base. The profile and decision patterns provide reusable context about the Senior Engineer's documented priorities and decision-making approach.
 
-```text
-                       Junior Developer
-                              |
-                              v
-                         Ask / Mentor
-                              |
-                              v
-                        FastAPI Backend
-                              |
-                              v
-                       Knowledge Retrieval
-                           ChromaDB
-                              |
-                              v
-                       Senior Digital Twin
-                 +---------------------------+
-                 | Senior Engineer Profile   |
-                 | Historical Decisions      |
-                 | Decision Patterns         |
-                 | Engineering Principles    |
-                 | Mentoring Behavior        |
-                 +---------------------------+
-                              |
-                              v
-                         RAG Pipeline
-                              |
-                              v
-                         OpenAI API
-                         GPT-5-mini
-                              |
-                              v
-                       Generated Answer
-                 +---------------------------+
-                 | Technical Recommendation  |
-                 | Historical Context        |
-                 | Engineering Reasoning     |
-                 | Supporting Sources        |
-                 | Risks and Trade-offs      |
-                 | Mentoring Guidance        |
-                 +---------------------------+
-                              |
-                              v
-                        Streamlit UI
+### 2.2 Generating an Answer
+
+```mermaid
+flowchart TD
+    Q["Junior Developer question"] --> M{"Interaction mode"}
+    M -->|"Ask Senior"| ASK["Direct recommendation"]
+    M -->|"Mentor"| MENTOR["Guided mentoring"]
+    ASK --> C["Build response context"]
+    MENTOR --> C
+    D["Relevant records from ChromaDB"] --> C
+    P["Senior profile and decision patterns"] --> C
+    C --> L["LLM response generation<br/>GPT-5-mini"]
+    L --> R["Answer with reasoning,<br/>sources, trade-offs and next steps"]
 ```
 
-### Traditional RAG vs. My Legacy Mentor
+The selected mode changes how the retrieved evidence and Senior context are used:
+
+- **Ask Senior:** prioritizes a direct, practical recommendation.
+- **Mentor:** prioritizes guided reasoning and progressive hints.
+- **Both modes:** can use retrieved records and the same documented Senior profile.
+
+### 2.3 Traditional RAG vs. My Legacy Mentor
 
 | Capability | Traditional RAG | My Legacy Mentor |
 |---|---|---|
 | Retrieve relevant documents | Yes | Yes |
-| Generate source-grounded answers | Yes | Yes |
+| Ground answers in retrieved records | Yes | Yes |
 | Represent a specific Senior Engineer persona | Not inherent | Yes |
-| Incorporate extracted decision patterns | Not inherent | Yes |
-| Apply historical engineering reasoning | Optional | Core design |
-| Use documented engineering preferences | Not inherent | Yes |
-| Personalized mentoring behavior | Not inherent | Yes |
-| Separate Ask and Mentor modes | Not inherent | Yes |
-| Preserve documented professional reasoning | Not inherent | Core objective |
+| Use extracted engineering decision patterns | Not inherent | Yes |
+| Apply documented engineering preferences | Not inherent | Yes |
+| Provide distinct Ask and Mentor behaviors | Not inherent | Yes |
+| Connect new questions to historical decisions | Possible, but not persona-specific by default | Core design goal |
 
-The distinction does not come from training a new foundation model.
-
-**The Digital Twin experience comes from combining knowledge retrieval with persona information, documented engineering decisions, recurring decision patterns, and mentoring behavior.**
-
-My Legacy Mentor is a simulation of documented professional reasoning, not a conscious or complete replica of a real person.
-
----
+**The distinction is the combination of retrieval, persona context, decision patterns, and mentoring behavior—not a claim that a new foundation model has been trained.**
 
 ## 3. Key Features
 
@@ -952,31 +872,85 @@ The main testing scenarios are:
 
 ## 13. Evaluation and Results
 
-My Legacy Mentor was evaluated against two reference configurations:
+We compared three configurations on the same **20-question answer-quality evaluation**:
 
-1. **Plain LLM**
-2. **Baseline RAG**
-3. **My Legacy Mentor — Senior Digital Twin**
+1. **Plain LLM** — the language model without the project's retrieved Senior knowledge.
+2. **Baseline RAG** — retrieval-augmented answers using the knowledge base.
+3. **My Legacy Mentor** — retrieval combined with the Senior persona, decision patterns, and Ask/Mentor behavior.
 
-The evaluation focuses on answer quality, grounding, engineering reasoning, retrieval relevance, and operational behavior.
+The questions covered five categories, with four questions per category: **Known, Adaptation, Composite, Unknown, and Adversarial**.
 
-The following results were reported by the project team's evaluation runs.
+### 13.1 Answer Quality Score
 
-### 13.1 Answer Quality Evaluation — 20 Questions
+Answers were assessed using six dimensions, each scored from 0 to 5:
 
-The evaluation covered five categories, with four questions per category:
+- Correctness and grounding
+- Reasoning and explanation
+- Completeness
+- Actionability
+- Uncertainty and risk handling
+- Clarity and appropriate detail
 
-- Known
-- Adaptation
-- Composite
-- Unknown
-- Adversarial
+The category results were reported as a normalized **Technical Answer Quality Score (TAQS)** on a 0–100 scale.
 
-Answers were assessed across six dimensions scored from 0 to 5.
+#### Overall TAQS Comparison
 
-The Technical Answer Quality Score (TAQS) was reported on a 0–100 scale.
+The same high-contrast, color-blind-conscious palette is used in all three charts: **Gray = Plain LLM**, **Blue = Baseline RAG**, and **Vermilion = My Legacy Mentor**.\n\nEach system is shown in its own chart so that no series can cover another. All three use the same 0–100 scale.
 
-#### TAQS Results by Category
+```mermaid
+---
+config:
+  xyChart:
+    width: 900
+    height: 360
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#666666"
+---
+xychart
+    title "Plain LLM — Overall TAQS"
+    x-axis ["Average"]
+    y-axis "TAQS (0-100)" 0 --> 100
+    bar "Plain LLM" [85.08]
+```
+
+```mermaid
+---
+config:
+  xyChart:
+    width: 900
+    height: 360
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#0072B2"
+---
+xychart
+    title "Baseline RAG — Overall TAQS"
+    x-axis ["Average"]
+    y-axis "TAQS (0-100)" 0 --> 100
+    bar "Baseline RAG" [94.56]
+```
+
+```mermaid
+---
+config:
+  xyChart:
+    width: 900
+    height: 360
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#D55E00"
+---
+xychart
+    title "My Legacy Mentor — Overall TAQS"
+    x-axis ["Average"]
+    y-axis "TAQS (0-100)" 0 --> 100
+    bar "My Legacy Mentor" [95.12]
+```
+
+My Legacy Mentor leads Baseline RAG by **0.56 points** and Plain LLM by **10.04 points**.
+
+#### TAQS by Category
 
 | Category | Plain LLM | Baseline RAG | My Legacy Mentor |
 |---|---:|---:|---:|
@@ -987,13 +961,72 @@ The Technical Answer Quality Score (TAQS) was reported on a 0–100 scale.
 | Adversarial | 92.6 | 95.6 | **96.6** |
 | **Average** | **85.08** | **94.56** | **95.12** |
 
-**My Legacy Mentor achieved the highest average category TAQS: 95.12/100.**
+Each system has a separate chart with the same five categories and the same 0–100 scale. This makes the values directly comparable without one series hiding another.
 
-It outperformed Baseline RAG in three of the five categories, particularly in Adaptation and Adversarial scenarios.
+```mermaid
+---
+config:
+  xyChart:
+    width: 900
+    height: 360
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#666666"
+---
+xychart
+    title "Plain LLM — TAQS by category"
+    x-axis ["Known", "Adaptation", "Composite", "Unknown", "Adversarial"]
+    y-axis "TAQS (0-100)" 0 --> 100
+    bar "Plain LLM" [69.8, 82.8, 85.6, 94.6, 92.6]
+```
 
-#### Detailed Answer Quality
+```mermaid
+---
+config:
+  xyChart:
+    width: 900
+    height: 360
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#0072B2"
+---
+xychart
+    title "Baseline RAG — TAQS by category"
+    x-axis ["Known", "Adaptation", "Composite", "Unknown", "Adversarial"]
+    y-axis "TAQS (0-100)" 0 --> 100
+    bar "Baseline RAG" [93.3, 95.1, 94.4, 94.4, 95.6]
+```
 
-| Dimension (0–5) | Plain LLM | Baseline RAG | My Legacy Mentor |
+```mermaid
+---
+config:
+  xyChart:
+    width: 900
+    height: 360
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#D55E00"
+---
+xychart
+    title "My Legacy Mentor — TAQS by category"
+    x-axis ["Known", "Adaptation", "Composite", "Unknown", "Adversarial"]
+    y-axis "TAQS (0-100)" 0 --> 100
+    bar "My Legacy Mentor" [95.5, 98.0, 92.8, 92.7, 96.6]
+```
+
+<details>
+<summary><strong>What the category results show</strong></summary>
+
+- My Legacy Mentor achieved the highest average TAQS: **95.12/100**.
+- It scored higher than Baseline RAG in **3 of the 5 categories**: Known, Adaptation, and Adversarial.
+- Its largest category lead over Baseline RAG was in Adaptation: **+2.9 points**.
+- Baseline RAG performed better in Composite and Unknown questions.
+
+</details>
+
+#### Detailed Answer Quality (0–5)
+
+| Dimension | Plain LLM | Baseline RAG | My Legacy Mentor |
 |---|---:|---:|---:|
 | Correctness & Grounding | 3.82 | **4.97** | 4.93 |
 | Reasoning & Explanation | 4.38 | 4.64 | **4.69** |
@@ -1002,57 +1035,83 @@ It outperformed Baseline RAG in three of the five categories, particularly in Ad
 | Uncertainty & Risk | 4.56 | 4.65 | **4.77** |
 | Clarity & Appropriate Detail | 4.35 | **4.50** | 4.35 |
 
-My Legacy Mentor achieved the highest scores in four of the six evaluated dimensions.
+Each system has a separate chart using the same six dimensions and the same 0–5 scale. This keeps every bar visible and makes the scores directly comparable.
 
-Its average across the displayed dimension scores is approximately **4.69/5**.
-
+```mermaid
 ---
-
-### 13.2 Benchmark Execution — 100 Questions
-
-A separate benchmark compared the three configurations using 100 identical technical questions and the same underlying model, **GPT-5-mini**.
-
-The benchmark covered Known, Adaptation, Composite, Unknown, and Adversarial scenarios.
-
-#### My Legacy Mentor Benchmark Results
-
-| Metric | Result |
-|---|---:|
-| Successfully processed questions | **100/100** |
-| Response success rate | **100%** |
-| Average response latency | **18.84 seconds** |
-| Median response latency | **17.83 seconds** |
-| Retrieval Recall@5 | **63.12%** |
-| Retrieval Coverage | **70.00%** |
-| Valid source references | **500/500** |
-
-All 300 responses across the three compared configurations were successfully generated in the reported benchmark.
-
-The results describe the measured benchmark execution rather than guaranteed performance under all workloads.
-
+config:
+  xyChart:
+    width: 900
+    height: 360
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#666666"
 ---
+xychart
+    title "Plain LLM — Answer quality dimensions"
+    x-axis ["Correctness", "Reasoning", "Completeness", "Actionability", "Uncertainty/Risk", "Clarity"]
+    y-axis "Score (0-5)" 0 --> 5
+    bar "Plain LLM" [3.82, 4.38, 4.41, 4.50, 4.56, 4.35]
+```
 
-### 13.3 Retrieval Comparison
-
-| Metric | Baseline RAG | My Legacy Mentor |
-|---|---:|---:|
-| Precision@5 | **15.25%** | 14.75% |
-| Recall@5 | **64.38%** | 63.12% |
-| MRR@5 | **39.69%** | 35.60% |
-| nDCG@5 | **43.35%** | 40.93% |
-| Retrieval Coverage | **72.50%** | 70.00% |
-
-Baseline RAG achieved slightly higher retrieval scores.
-
-However, My Legacy Mentor achieved a higher average category TAQS in the separate answer-quality evaluation.
-
-This reflects the project's central goal:
-
-**The value of a Senior Digital Twin is not measured only by the documents it retrieves, but also by how it uses documented experience to provide useful engineering guidance.**
-
-Retrieval metrics were calculated using provisional relevance annotations for 80 questions with usable judgments.
-
+```mermaid
 ---
+config:
+  xyChart:
+    width: 900
+    height: 360
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#0072B2"
+---
+xychart
+    title "Baseline RAG — Answer quality dimensions"
+    x-axis ["Correctness", "Reasoning", "Completeness", "Actionability", "Uncertainty/Risk", "Clarity"]
+    y-axis "Score (0-5)" 0 --> 5
+    bar "Baseline RAG" [4.97, 4.64, 4.65, 4.60, 4.65, 4.50]
+```
+
+```mermaid
+---
+config:
+  xyChart:
+    width: 900
+    height: 360
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#D55E00"
+---
+xychart
+    title "My Legacy Mentor — Answer quality dimensions"
+    x-axis ["Correctness", "Reasoning", "Completeness", "Actionability", "Uncertainty/Risk", "Clarity"]
+    y-axis "Score (0-5)" 0 --> 5
+    bar "My Legacy Mentor" [4.93, 4.69, 4.74, 4.68, 4.77, 4.35]
+```
+
+My Legacy Mentor achieved the highest score in **4 of the 6 dimensions**: reasoning, completeness, actionability, and uncertainty/risk handling.
+
+Its average across the six displayed dimensions is approximately **4.69/5**.
+
+### 13.2 What We Can Conclude
+
+The measured overall difference between My Legacy Mentor and Baseline RAG is **+0.56 TAQS points** (95.12 vs. 94.56). This is a modest improvement, not evidence that the Digital Twin is better in every situation.
+
+The more specific positive signal is in the dimensions most closely related to the Digital Twin's purpose: it scored higher than Baseline RAG in reasoning, completeness, actionability, and uncertainty/risk handling. It also performed better in Adaptation and Adversarial categories.
+
+The results therefore support a focused claim:
+
+> **My Legacy Mentor combines the grounding of RAG with documented Senior-specific reasoning and mentoring context, and the 20-question evaluation shows a small overall answer-quality improvement over the Baseline RAG configuration, with stronger scores in four of six reasoning and response-quality dimensions.**
+
+### 13.3 Evaluation Scope
+
+These results should be interpreted in context:
+
+- The evaluation contains **20 questions**, so it is a small sample.
+- The knowledge base is synthetic and represents one fictional Senior Engineer.
+- Baseline RAG remains stronger in correctness/grounding and clarity in the displayed dimension scores.
+- The results are directional evidence from the project's rubric-based comparison; they do not establish statistical significance or guarantee performance on every real-world engineering question.
+
+We present the results transparently rather than claiming that My Legacy Mentor wins every metric.
 
 ### 13.4 Synthetic Knowledge Base
 
@@ -1068,18 +1127,15 @@ The project's synthetic knowledge foundation contains **72 structured engineerin
 | Commits | 10 |
 | **Total** | **72** |
 
-Additional knowledge elements include:
+The knowledge base is complemented by:
 
-- A structured Senior Engineer profile
+- One structured Senior Engineer profile
 - **12 extracted engineering decision patterns**
-- Historical engineering decisions
-- Documented technical reasoning
-- Architectural trade-offs
-- Mentoring principles
+- Historical engineering decisions and their context
+- Documented technical reasoning and trade-offs
+- Mentoring principles and examples
 
-These elements help the system connect new technical questions with documented engineering experience.
-
----
+These elements provide the evidence and behavioral context used by the Digital Twin when responding to new technical questions.
 
 ## 14. Troubleshooting
 
