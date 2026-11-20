@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 430" role="img" aria-label="Request Flow">
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker></defs>
+<rect width="100%" height="100%" rx="18" fill="#f8fafc"/>
+<text x="32" y="38" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700" fill="#0f172a">Request Flow</text>
+<path d="M209.0,205.0 L242.0,205.0" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M434.0,205.0 L467.0,205.0" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="450.5" y="196.0" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="12" fill="#475569">POST /chat</text>
+<path d="M664.0,205.0 L697.0,205.0" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M795.0,244.0 L800.0,292.0" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M899.0,335.0 L922.0,215.0" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="25" y="170" width="180" height="70" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.6"/>
+<text x="115.0" y="201.5" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="600" fill="#0f172a">Developer asks a</text>
+<text x="115.0" y="218.5" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="600" fill="#0f172a">question</text>
+<rect x="250" y="170" width="180" height="70" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.6"/>
+<text x="340.0" y="201.5" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="600" fill="#0f172a">Streamlit sends</text>
+<text x="340.0" y="218.5" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="600" fill="#0f172a">request</text>
+<rect x="475" y="170" width="185" height="70" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.6"/>
+<text x="567.5" y="201.5" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="600" fill="#0f172a">FastAPI receives</text>
+<text x="567.5" y="218.5" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="600" fill="#0f172a">request</text>
+<rect x="705" y="170" width="180" height="70" rx="12" fill="#ede9fe" stroke="#8b5cf6" stroke-width="1.6"/>
+<text x="795.0" y="201.5" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="600" fill="#0f172a">RAG retrieves</text>
+<text x="795.0" y="218.5" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="600" fill="#0f172a">knowledge</text>
+<rect x="705" y="300" width="190" height="70" rx="12" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+<text x="800.0" y="331.5" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="600" fill="#0f172a">Add persona and</text>
+<text x="800.0" y="348.5" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="600" fill="#0f172a">decision patterns</text>
+<rect x="930" y="170" width="65" height="90" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.6"/>
+<text x="962.5" y="203.0" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="600" fill="#0f172a">GPT-5-mini</text>
+<text x="962.5" y="220.0" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="600" fill="#0f172a">generates</text>
+<text x="962.5" y="237.0" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="600" fill="#0f172a">response</text>
+</svg>
