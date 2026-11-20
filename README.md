@@ -333,7 +333,7 @@ Docker Compose is the recommended deployment method for the hackathon demonstrat
 ### Step 1 — Clone the Repository
 
 ```bash
-git clone https://gitlab.com/hualtf4-hackathon-2026/my-legacy-mentor-hualtf4.git
+git clone https://github.com/AnastasisDrougas/my-legacy-mentor-hualtf4.git
 
 cd my-legacy-mentor-hualtf4
 ```
